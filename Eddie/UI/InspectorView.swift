@@ -162,8 +162,8 @@ struct TitleSection: View {
         VStack(alignment: .leading, spacing: 12) {
             GlassCard {
             HStack(spacing: 6) {
-                Image(systemName: "textformat").foregroundStyle(TrackColor.title)
-                Text("Title").font(.system(size: 12, weight: .semibold)).foregroundStyle(Ink.primary)
+                Image(systemName: item.isCaption ? "captions.bubble" : "textformat").foregroundStyle(item.isCaption ? TrackColor.caption : TrackColor.title)
+                Text(item.isCaption ? "Caption" : "Title").font(.system(size: 12, weight: .semibold)).foregroundStyle(Ink.primary)
                 Spacer()
                 Text(String(format: "%.1f s", item.duration)).font(.system(size: 11).monospacedDigit()).foregroundStyle(Ink.tertiary)
             }
@@ -226,6 +226,48 @@ struct TitleSection: View {
 
             }
 
+            GlassCard(title: "Effects") {
+                HStack(spacing: 8) {
+                    PillSlider(label: "Outline", value: item.outline > 0 ? "\(Int((item.outline * 100).rounded()))" : "Off",
+                               amount: Binding(get: { item.outline }, set: { v in model.updateTitle(item.id) { $0.outline = v < 0.005 ? 0 : v } }),
+                               range: 0...0.25, reset: 0)
+                    colorWell(\.outlineColor, help: "Outline color")
+                }
+                HStack(spacing: 8) {
+                    PillSlider(label: "Glow", value: item.glow > 0 ? "\(Int((item.glow * 100).rounded()))%" : "Off",
+                               amount: Binding(get: { item.glow }, set: { v in model.updateTitle(item.id) { $0.glow = v < 0.01 ? 0 : v } }),
+                               range: 0...1, reset: 0)
+                    colorWell(\.glowColor, help: "Glow color")
+                }
+                PillMenu(label: "Animation", value: item.animation.label) {
+                    ForEach(TitleItem.Animation.allCases) { a in
+                        Button(a.label) { model.updateTitle(item.id, undo: .push) { $0.animation = a } }
+                    }
+                }
+                HStack(spacing: 8) {
+                    Toggle(isOn: Binding(get: { item.wordHighlight }, set: { v in model.updateTitle(item.id, undo: .push) { $0.wordHighlight = v } })) {
+                        Text("Highlight each word as it's said").font(.system(size: 11.5)).foregroundStyle(Ink.primary)
+                    }
+                    .toggleStyle(.switch).controlSize(.mini)
+                    Spacer(minLength: 0)
+                    colorWell(\.highlightColor, help: "Highlight color")
+                }
+                if item.isCaption {
+                    GlassPillButton(title: "Apply this look to all captions", icon: "square.on.square") {
+                        let look = item
+                        model.mutate(.push) { p in
+                            for i in p.titles.indices where p.titles[i].isCaption {
+                                let keep = p.titles[i]
+                                p.titles[i] = look
+                                p.titles[i].id = keep.id; p.titles[i].text = keep.text; p.titles[i].start = keep.start
+                                p.titles[i].duration = keep.duration; p.titles[i].words = keep.words
+                                if look.x == nil { p.titles[i].x = keep.x; p.titles[i].y = keep.y }
+                            }
+                        }
+                    }
+                }
+            }
+
             GlassCard(title: "Placement") {
             HStack(spacing: 8) {
                 PillSlider(label: "Size", value: "\(Int((item.size * 100).rounded()))%",
@@ -273,6 +315,19 @@ struct TitleSection: View {
                     let hex = String(format: "#%02X%02X%02X", Int(ns.redComponent * 255), Int(ns.greenComponent * 255), Int(ns.blueComponent * 255))
                     model.updateTitle(item.id) { $0.color = hex }
                 })
+    }
+
+    private func colorWell(_ key: WritableKeyPath<TitleItem, String>, help: String) -> some View {
+        ColorPicker("", selection: Binding(
+            get: { Color(nsColor: TitleRenderer.color(item[keyPath: key])) },
+            set: { c in
+                let ns = NSColor(c).usingColorSpace(.sRGB) ?? .white
+                let hex = String(format: "#%02X%02X%02X", Int(ns.redComponent * 255), Int(ns.greenComponent * 255), Int(ns.blueComponent * 255))
+                model.updateTitle(item.id) { $0[keyPath: key] = hex }
+            }), supportsOpacity: false)
+            .labelsHidden()
+            .frame(width: 30)
+            .help(help)
     }
 
     private func label(_ s: String) -> some View {

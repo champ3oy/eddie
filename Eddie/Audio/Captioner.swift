@@ -29,6 +29,11 @@ enum Captioner {
 
     /// Captions for the whole project, in timeline time.
     static func captions(for project: Project, locale: Locale = .current) async throws -> [TitleItem] {
+        lines(from: try await words(for: project, locale: locale))
+    }
+
+    /// Every spoken word in the clips, in timeline time.
+    static func words(for project: Project, locale: Locale = .current) async throws -> [Word] {
         guard await requestAccess() else { throw CaptionError.notAllowed }
         guard let recognizer = SFSpeechRecognizer(locale: locale) ?? SFSpeechRecognizer(locale: Locale(identifier: "en-US")),
               recognizer.isAvailable else { throw CaptionError.unavailable }
@@ -46,7 +51,7 @@ enum Captioner {
             }
         }
         guard !words.isEmpty else { throw CaptionError.noSpeech }
-        return lines(from: words)
+        return words
     }
 
     /// The clip's used stretch of sound as a temporary .m4a (times start at 0).
@@ -95,6 +100,7 @@ enum Captioner {
             var t = TitleItem(text: current.map(\.text).joined(separator: " "), start: first.start,
                               duration: max(0.8, last.end - first.start + 0.15), style: .caption)
             t.isCaption = true
+            t.words = current.map { TitleItem.Word(text: $0.text, start: $0.start, end: $0.end) }
             out.append(t)
             current = []
         }

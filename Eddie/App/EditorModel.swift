@@ -1172,6 +1172,12 @@ final class EditorModel: ObservableObject {
     @Published private(set) var captioning = false
 
     /// Listens to the clips (on this Mac) and adds captions, replacing earlier auto captions.
+    /// The language spoken in the clips (for auto captions).
+    @Published var captionLanguage = UserDefaults.standard.string(forKey: "captionLanguage") ?? Locale.current.identifier {
+        didSet { UserDefaults.standard.set(captionLanguage, forKey: "captionLanguage") }
+    }
+    var captionLocale: Locale { Locale(identifier: captionLanguage) }
+
     func autoCaptions() {
         guard hasProject, !captioning else { return }
         captioning = true
@@ -1180,11 +1186,8 @@ final class EditorModel: ObservableObject {
         Task {
             defer { captioning = false }
             do {
-                let lines = try await Captioner.captions(for: project)
-                mutate(.push) { p in
-                    p.titles.removeAll { $0.isCaption }
-                    p.titles.append(contentsOf: lines)
-                }
+                let lines = try await Captioner.captions(for: project, locale: captionLocale)
+                addCaptions(lines, replacing: true)
                 append(.info, "Added \(lines.count) caption\(lines.count == 1 ? "" : "s").")
             } catch {
                 alert = error.localizedDescription
@@ -1194,6 +1197,173 @@ final class EditorModel: ObservableObject {
 
     func removeCaptions() {
         mutate(.push) { $0.titles.removeAll { $0.isCaption } }
+    }
+
+    /// Applies a caption look to every caption (and new captions follow it).
+    @Published var captionPreset = UserDefaults.standard.string(forKey: "captionPreset") ?? "Classic" {
+        didSet { UserDefaults.standard.set(captionPreset, forKey: "captionPreset") }
+    }
+
+    func applyCaptionPreset(_ name: String) {
+        guard let preset = CaptionPreset.all.first(where: { $0.name == name }) else { return }
+        captionPreset = name
+        mutate(.push) { p in for i in p.titles.indices where p.titles[i].isCaption { preset.apply(&p.titles[i]) } }
+    }
+
+    /// New captions take the current caption look.
+    private func styled(_ captions: [TitleItem]) -> [TitleItem] {
+        guard let preset = CaptionPreset.all.first(where: { $0.name == captionPreset }) else { return captions }
+        return captions.map { var c = $0; preset.apply(&c); return c }
+    }
+
+    /// Adds captions; `replacing` clears the existing captions first.
+    func addCaptions(_ captions: [TitleItem], replacing: Bool) {
+        let new = styled(captions)
+        mutate(.push) { p in
+            if replacing { p.titles.removeAll { $0.isCaption } }
+            p.titles.append(contentsOf: new)
+        }
+    }
+
+    /// A blank caption at the playhead (2 s), ready to type into.
+    func addCaptionAtPlayhead() {
+        guard hasProject else { return }
+        let start = min(clock.time, max(0, project.duration - 0.5))
+        var c = TitleItem(text: "Caption", start: start, duration: min(2, max(0.5, project.duration - start)), style: .caption)
+        c.isCaption = true
+        c = styled([c])[0]
+        mutate(.push) { $0.titles.append(c) }
+        selection = c.id
+    }
+
+    /// Captions from a typed or pasted script, spread over the whole video (or from the playhead on).
+    func addManualCaptions(_ script: String, fromPlayhead: Bool, replacing: Bool) {
+        let start = fromPlayhead ? clock.time : 0
+        let lines = CaptionMaker.manual(script, from: start, to: project.duration)
+        guard !lines.isEmpty else { alert = "There's no text to turn into captions, or no room on the timeline."; return }
+        addCaptions(lines, replacing: replacing)
+        append(.info, "Added \(lines.count) caption\(lines.count == 1 ? "" : "s").")
+    }
+
+    func importSRT(_ url: URL, replacing: Bool) {
+        guard let text = (try? String(contentsOf: url, encoding: .utf8)) ?? (try? String(contentsOf: url, encoding: .isoLatin1)) else {
+            alert = "Couldn't read \(url.lastPathComponent)."; return
+        }
+        let lines = CaptionMaker.fromSRT(text)
+        guard !lines.isEmpty else { alert = "\(url.lastPathComponent) has no captions Eddie can read."; return }
+        addCaptions(lines, replacing: replacing)
+        append(.info, "Imported \(lines.count) captions from \(url.lastPathComponent).")
+    }
+
+    func exportSRT(to url: URL) {
+        do {
+            try SRT.export(project.captions).write(to: url, atomically: true, encoding: .utf8)
+            append(.info, "Saved captions to \(url.lastPathComponent).")
+        } catch {
+            alert = "Couldn't save the captions: \(error.localizedDescription)"
+        }
+    }
+
+    /// Splits a caption in two at the playhead (or its middle), dividing the words.
+    func splitCaption(_ id: UUID) {
+        guard let c = project.titles.first(where: { $0.id == id }) else { return }
+        let words = c.timedWords
+        guard words.count > 1 else { return }
+        let t = (clock.time > c.start + 0.1 && clock.time < c.end - 0.1) ? clock.time : c.start + c.duration / 2
+        let cut = max(1, min(words.count - 1, words.firstIndex { $0.start >= t } ?? words.count / 2))
+        var a = c, b = c
+        b.id = UUID()
+        a.text = words[..<cut].map(\.text).joined(separator: " ")
+        b.text = words[cut...].map(\.text).joined(separator: " ")
+        a.words = c.words.count == words.count ? Array(c.words[..<cut]) : []
+        b.words = c.words.count == words.count ? Array(c.words[cut...]) : []
+        let mid = words[cut].start
+        a.duration = max(0.3, mid - c.start)
+        b.start = mid
+        b.duration = max(0.3, c.end - mid)
+        mutate(.push) { p in
+            guard let i = p.titles.firstIndex(where: { $0.id == id }) else { return }
+            p.titles[i] = a
+            p.titles.insert(b, at: i + 1)
+        }
+    }
+
+    /// Joins a caption with the next one.
+    func mergeCaptionWithNext(_ id: UUID) {
+        let list = project.captions
+        guard let i = list.firstIndex(where: { $0.id == id }), i + 1 < list.count else { return }
+        let a = list[i], b = list[i + 1]
+        var m = a
+        m.text = a.text + " " + b.text
+        m.words = (a.words.isEmpty || b.words.isEmpty) ? [] : a.words + b.words
+        m.duration = b.end - a.start
+        mutate(.push) { p in
+            p.titles.removeAll { $0.id == b.id }
+            p.updateTitle(a.id) { $0 = m }
+        }
+    }
+
+    @Published private(set) var captionWork: String?
+
+    /// Translates every caption (keeping the original above it when `bilingual`), using the AI in Settings.
+    func translateCaptions(to language: String, bilingual: Bool) {
+        let list = project.captions
+        guard !list.isEmpty, captionWork == nil else { return }
+        captionWork = "Translating captions to \(language)…"
+        let model = makeVisionModel()
+        Task {
+            defer { captionWork = nil }
+            do {
+                let originals = list.map { $0.text.replacingOccurrences(of: "\n", with: " ") }
+                let translated = try await CaptionMaker.translate(originals, to: language, model: model)
+                mutate(.push) { p in
+                    for (c, t) in zip(list, translated) {
+                        p.updateTitle(c.id) { item in
+                            item.text = bilingual ? item.text + "\n" + t : t
+                            item.words = []
+                        }
+                    }
+                }
+                append(.info, "Translated \(list.count) captions to \(language).")
+            } catch {
+                alert = "Couldn't translate: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    /// Cuts out "um", "uh" and similar, using speech recognition (on this Mac).
+    func removeFillerWords() {
+        guard hasProject, captionWork == nil else { return }
+        captionWork = "Listening for filler words…"
+        let snapshot = project
+        Task {
+            defer { captionWork = nil }
+            do {
+                let words = try await Captioner.words(for: snapshot)
+                let ranges = SpeechCleanup.fillerRanges(words)
+                guard !ranges.isEmpty else { append(.info, "No filler words found."); return }
+                let before = project.duration
+                mutate(.push) { $0.removeRanges(ranges) }
+                append(.info, String(format: "Removed %d filler words (%.1f s).", ranges.count, before - project.duration))
+            } catch {
+                alert = error.localizedDescription
+            }
+        }
+    }
+
+    /// Cuts out pauses where the clips' own sound is quiet for longer than `minimum` seconds.
+    func removeSilences(minimum: Double = 0.7) {
+        guard hasProject, captionWork == nil else { return }
+        captionWork = "Finding pauses…"
+        let snapshot = project
+        Task {
+            defer { captionWork = nil }
+            let ranges = await SpeechCleanup.silenceRanges(snapshot, minimum: minimum)
+            guard !ranges.isEmpty else { append(.info, "No long pauses found."); return }
+            let before = project.duration
+            mutate(.push) { $0.removeRanges(ranges) }
+            append(.info, String(format: "Removed %d pauses (%.1f s).", ranges.count, before - project.duration))
+        }
     }
 
     // MARK: Voiceover

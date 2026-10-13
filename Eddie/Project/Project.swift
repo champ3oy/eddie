@@ -223,6 +223,30 @@ struct TitleItem: Identifiable, Codable, Equatable {
         var id: String { rawValue }
     }
 
+    /// How the text comes on and goes off.
+    enum Animation: String, Codable, CaseIterable, Identifiable {
+        case fade, pop, slideUp, slideDown, typewriter, bounce, none
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .fade: return "Fade"
+            case .pop: return "Pop"
+            case .slideUp: return "Slide up"
+            case .slideDown: return "Slide down"
+            case .typewriter: return "Typewriter"
+            case .bounce: return "Bounce"
+            case .none: return "None"
+            }
+        }
+    }
+
+    /// One spoken word in a caption, in timeline seconds (for word-by-word highlighting).
+    struct Word: Codable, Equatable {
+        var text: String
+        var start: Double
+        var end: Double
+    }
+
     var id = UUID()
     var text = "Title"
     var start: Double
@@ -245,8 +269,20 @@ struct TitleItem: Identifiable, Codable, Equatable {
     /// Dark plate behind the text. nil = the style's default.
     var plate: Bool?
     var align: Align?
-    /// Made by auto captions (so they can be replaced together).
+    /// A caption (on the captions lane, styled and edited together; auto captions replace these).
     var isCaption = false
+    /// Outline around the letters, as a fraction of the font size (0 = none).
+    var outline = 0.0
+    var outlineColor = "#000000"
+    /// Soft glow around the letters, 0…1.
+    var glow = 0.0
+    var glowColor = "#FFD60A"
+    var animation = Animation.fade
+    /// Light up each word as it's spoken (karaoke-style), in `highlightColor`.
+    var wordHighlight = false
+    var highlightColor = "#FFD60A"
+    /// Word timings from speech recognition; empty means words are spread evenly over the caption.
+    var words: [Word] = []
 
     static let minLength = 0.3
     var end: Double { start + duration }
@@ -282,6 +318,29 @@ struct TitleItem: Identifiable, Codable, Equatable {
         plate = try c.decodeIfPresent(Bool.self, forKey: .plate)
         align = try c.decodeIfPresent(Align.self, forKey: .align)
         isCaption = try c.decodeIfPresent(Bool.self, forKey: .isCaption) ?? false
+        outline = try c.decodeIfPresent(Double.self, forKey: .outline) ?? 0
+        outlineColor = try c.decodeIfPresent(String.self, forKey: .outlineColor) ?? "#000000"
+        glow = try c.decodeIfPresent(Double.self, forKey: .glow) ?? 0
+        glowColor = try c.decodeIfPresent(String.self, forKey: .glowColor) ?? "#FFD60A"
+        animation = try c.decodeIfPresent(Animation.self, forKey: .animation) ?? .fade
+        wordHighlight = try c.decodeIfPresent(Bool.self, forKey: .wordHighlight) ?? false
+        highlightColor = try c.decodeIfPresent(String.self, forKey: .highlightColor) ?? "#FFD60A"
+        words = try c.decodeIfPresent([Word].self, forKey: .words) ?? []
+    }
+
+    /// The words of the text with their times: speech timings when they still match the text,
+    /// otherwise spread over the caption by length.
+    var timedWords: [Word] {
+        let pieces = text.split(whereSeparator: { $0 == " " || $0 == "\n" }).map(String.init)
+        guard !pieces.isEmpty else { return [] }
+        if words.count == pieces.count { return zip(pieces, words).map { Word(text: $0, start: $1.start, end: $1.end) } }
+        let total = Double(pieces.reduce(0) { $0 + $1.count + 1 })
+        var t = start
+        return pieces.map { w in
+            let d = duration * Double(w.count + 1) / total
+            defer { t += d }
+            return Word(text: w, start: t, end: t + d)
+        }
     }
 }
 
@@ -599,6 +658,43 @@ struct Project: Codable, Equatable {
     mutating func updateMusic(_ id: UUID, _ change: (inout MusicItem) -> Void) {
         guard let i = music.firstIndex(where: { $0.id == id }) else { return }
         change(&music[i])
+    }
+
+    // MARK: Captions
+
+    var captions: [TitleItem] { titles.filter(\.isCaption).sorted { $0.start < $1.start } }
+
+    /// Removes stretches of the timeline (e.g. filler words or silences), closing the gaps. Titles, overlays,
+    /// songs and markers after a cut move back with the picture. Ranges are timeline seconds.
+    mutating func removeRanges(_ ranges: [(start: Double, end: Double)]) {
+        // Merge, then cut from the end so earlier times stay valid.
+        let merged = ranges.filter { $0.end - $0.start > 0.02 }.sorted { $0.start < $1.start }
+            .reduce(into: [(start: Double, end: Double)]()) { acc, r in
+                if let last = acc.last, r.start <= last.end + 0.01 { acc[acc.count - 1].end = max(last.end, r.end) } else { acc.append(r) }
+            }
+        for r in merged.reversed() {
+            let a = max(0, r.start), b = min(duration, r.end)
+            guard b - a > 0.02 else { continue }
+            if b < duration - 0.01 { split(at: b) }
+            if a > 0.01 { split(at: a) }
+            let s = starts
+            let doomed = clips.indices.filter { s[$0] >= a - 0.02 && s[$0] + clips[$0].duration <= b + 0.02 }.map { clips[$0].id }
+            guard !doomed.isEmpty else { continue }
+            let removed = doomed.compactMap { id in clips.first { $0.id == id } }.reduce(0) { $0 + $1.duration }
+            clips.removeAll { doomed.contains($0.id) }
+            // Everything that sat after the cut moves back; anything inside it goes.
+            func shift(_ t: Double) -> Double { t >= b ? t - removed : t }
+            titles = titles.compactMap { t in
+                var t = t
+                if t.start >= a && t.end <= b { return nil }
+                t.start = shift(t.start)
+                t.words = t.words.map { var w = $0; w.start = shift(w.start); w.end = shift(w.end); return w }
+                return t
+            }
+            for i in overlays.indices { overlays[i].start = shift(overlays[i].start) }
+            for i in music.indices { music[i].start = shift(music[i].start) }
+            markers = markers.filter { !($0.time > a && $0.time < b) }.map { var m = $0; m.time = shift(m.time); return m }
+        }
     }
 
     /// Clip boundaries plus overlay, title, song and marker edges — what dragged edges snap to.

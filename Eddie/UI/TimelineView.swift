@@ -52,7 +52,7 @@ struct TimelineView: View {
     /// Songs, voiceovers and effects stack on as many audio lanes as they use.
     private var audioLanes: Int { max(1, (model.project.music.map(\.lane).max() ?? 0) + 1) }
     private var musicLanesHeight: CGFloat { CGFloat(audioLanes) * musicHeight + CGFloat(audioLanes - 1) * gap }
-    private var lanesHeight: CGFloat { titleHeight + overlayHeight + gradeHeight + videoHeight + audioHeight + musicLanesHeight + gap * 5 }
+    private var lanesHeight: CGFloat { titleHeight * 2 + overlayHeight + gradeHeight + videoHeight + audioHeight + musicLanesHeight + gap * 6 }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -361,6 +361,7 @@ struct TimelineView: View {
     private var gutterIcons: some View {
         VStack(spacing: gap) {
             Image(systemName: "textformat").frame(height: titleHeight)
+            Image(systemName: "captions.bubble").frame(height: titleHeight)
             Image(systemName: "rectangle.on.rectangle").frame(height: overlayHeight)
             Image(systemName: "wand.and.stars").frame(height: gradeHeight)
             Image(systemName: "film").frame(height: videoHeight)
@@ -394,7 +395,8 @@ struct TimelineView: View {
     private func content(pps: CGFloat) -> some View {
         let starts = model.project.starts
         let titleTop = rulerHeight + 6
-        let overlayTop = titleTop + titleHeight + gap
+        let captionTop = titleTop + titleHeight + gap
+        let overlayTop = captionTop + titleHeight + gap
         let laneTop = overlayTop + overlayHeight + gap
         let playheadX = CGFloat(clock.time) * pps
         return ZStack(alignment: .topLeading) {
@@ -424,7 +426,7 @@ struct TimelineView: View {
             // Titles lane
             ForEach(model.project.titles) { item in
                 titleBlock(item, pps: pps)
-                    .offset(y: titleTop)
+                    .offset(y: item.isCaption ? captionTop : titleTop)
             }
 
             // Overlay lane (B-roll, picture-in-picture)
@@ -962,9 +964,9 @@ struct TimelineView: View {
     private func titleBlock(_ item: TitleItem, pps: CGFloat) -> some View {
         let selected = model.selectedIDs.contains(item.id)
         return ZStack(alignment: .leading) {
-            RoundedRectangle(cornerRadius: TrackColor.radius, style: .continuous).fill(TrackColor.title)
+            RoundedRectangle(cornerRadius: TrackColor.radius, style: .continuous).fill(item.isCaption ? TrackColor.caption : TrackColor.title)
             HStack(spacing: 5) {
-                Image(systemName: "textformat").font(.system(size: 10, weight: .semibold))
+                Image(systemName: item.isCaption ? "captions.bubble" : "textformat").font(.system(size: 10, weight: .semibold))
                 Text(item.text.replacingOccurrences(of: "\n", with: " "))
                     .font(.system(size: 10.5, weight: .medium))
                     .lineLimit(1)
@@ -1079,6 +1081,7 @@ enum TrackColor {
     static let audio = Color(red: 0.86, green: 0.40, blue: 0.90)
     static let music = Color(red: 0.93, green: 0.52, blue: 0.25)
     static let title = Color(red: 0.20, green: 0.66, blue: 0.60)
+    static let caption = Color(red: 0.30, green: 0.50, blue: 0.62)
     static let overlay = Color(red: 0.95, green: 0.78, blue: 0.30)
     static let voiceover = Color(red: 0.25, green: 0.55, blue: 0.85)
     static let effect = Color(red: 0.62, green: 0.42, blue: 0.86)

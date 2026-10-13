@@ -150,7 +150,7 @@ final class GradeCompositor: NSObject, AVVideoCompositing {
             image = Self.compose(instruction, request: request, snap: snap, mode: snap.mode, size: size, now: now)
         }
         for title in snap.titles where now >= title.start && now < title.end {
-            if let overlay = TitleRenderer.overlay(title, renderSize: size, opacity: TitleRenderer.opacity(of: title, at: now)) {
+            if let overlay = TitleRenderer.overlay(title, renderSize: size, at: now) {
                 image = overlay.composited(over: image)
             }
         }

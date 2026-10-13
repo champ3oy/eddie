@@ -5,6 +5,7 @@ struct ContentView: View {
     @State private var showInspector = true
     @State private var dropTargeted = false
     @AppStorage("showMediaBin") private var showMedia = false
+    @AppStorage("showCaptions") private var showCaptions = false
 
     var body: some View {
         Group {
@@ -12,7 +13,11 @@ struct ContentView: View {
                 ProjectsView(library: model.library)
             } else if model.hasProject {
                 HStack(spacing: 0) {
-                    if showMedia {
+                    if showCaptions {
+                        CaptionsPanel()
+                            .frame(width: 270)
+                        Divider()
+                    } else if showMedia {
                         MediaBinView()
                             .frame(width: 200)
                         Divider()
@@ -78,8 +83,13 @@ struct ContentView: View {
                 .help("All projects (⌘0) — this one is saved automatically")
         }
         ToolbarItem(placement: .navigation) {
-            Button { withAnimation(.easeOut(duration: 0.15)) { showMedia.toggle() } } label: { Label("Media", systemImage: "photo.on.rectangle") }
+            Button { withAnimation(.easeOut(duration: 0.15)) { showMedia.toggle(); if showMedia { showCaptions = false } } } label: { Label("Media", systemImage: "photo.on.rectangle") }
                 .help("Show or hide this project's media")
+                .disabled(!model.hasProject)
+        }
+        ToolbarItem(placement: .navigation) {
+            Button { withAnimation(.easeOut(duration: 0.15)) { showCaptions.toggle(); if showCaptions { showMedia = false } } } label: { Label("Captions", systemImage: "captions.bubble") }
+                .help("Captions: auto, typed or imported; styles, translation and the transcript")
                 .disabled(!model.hasProject)
         }
         ToolbarItemGroup(placement: .primaryAction) {
