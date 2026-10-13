@@ -1,6 +1,6 @@
 name: Eddie
 options:
-  bundleIdPrefix: local.eddie
+  bundleIdPrefix: com.deadalus
   deploymentTarget:
     macOS: "15.0"
   createIntermediateGroups: true
@@ -35,7 +35,8 @@ targets:
         NSSpeechRecognitionUsageDescription: Eddie turns speech in your clips into captions, on this Mac.
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: local.eddie
+        PRODUCT_BUNDLE_IDENTIFIER: com.deadalus.eddie
+        CODE_SIGN_ENTITLEMENTS: Eddie/Eddie.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         PRODUCT_NAME: Eddie
         GENERATE_INFOPLIST_FILE: YES
@@ -46,6 +47,9 @@ targets:
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
         ENABLE_HARDENED_RUNTIME: NO
+      configs:
+        Release:
+          ENABLE_HARDENED_RUNTIME: YES
   eddie-mcp:
     type: tool
     platform: macOS
@@ -56,8 +60,11 @@ targets:
     settings:
       base:
         PRODUCT_NAME: eddie-mcp
-        PRODUCT_BUNDLE_IDENTIFIER: local.eddie.mcp
+        PRODUCT_BUNDLE_IDENTIFIER: com.deadalus.eddie.mcp
         SKIP_INSTALL: YES
+      configs:
+        Release:
+          ENABLE_HARDENED_RUNTIME: YES
   EddieTests:
     type: bundle.unit-test
     platform: macOS
@@ -67,7 +74,7 @@ targets:
       - target: Eddie
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: local.eddie.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.deadalus.eddie.tests
         GENERATE_INFOPLIST_FILE: YES
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Eddie.app/Contents/MacOS/Eddie"
         BUNDLE_LOADER: "$(TEST_HOST)"

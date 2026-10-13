@@ -50,7 +50,7 @@ final class EddieConnection {
     }
 
     private var eddieRunning: Bool {
-        !NSRunningApplication.runningApplications(withBundleIdentifier: "local.eddie").isEmpty
+        !NSRunningApplication.runningApplications(withBundleIdentifier: AgentProtocol.appBundleID).isEmpty
     }
 
     /// Connects, opening Eddie first if it isn't running.
@@ -61,7 +61,7 @@ final class EddieConnection {
             log("opening Eddie")
             let open = Process()
             open.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-            open.arguments = ["-g", "-b", "local.eddie"]
+            open.arguments = ["-g", "-b", AgentProtocol.appBundleID]
             try? open.run()
             open.waitUntilExit()
             for _ in 0..<60 {

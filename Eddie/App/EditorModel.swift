@@ -81,7 +81,7 @@ final class EditorModel: ObservableObject {
         agentServerError = nil
         guard agentControl else { AgentServer.shared.stop(); return }
         do {
-            try AgentServer.shared.start { tool, args in
+            try AgentServer.shared.start { @MainActor tool, args in
                 await AgentTools.handle(tool, args, model: EditorModel.shared)
             }
         } catch {

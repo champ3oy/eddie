@@ -6,6 +6,8 @@ import Foundation
 ///   response: {"id": 1, "ok": true, "text": "…", "image": "<base64 JPEG>"?}
 enum AgentProtocol {
     static let version = "1.0"
+    /// Eddie's bundle identifier (the helper finds and opens the app with it).
+    static let appBundleID = "com.deadalus.eddie"
 
     /// `~/Library/Application Support/Eddie/agent.sock` (or `EDDIE_AGENT_SOCKET`, for tests).
     static var socketPath: String {

@@ -61,19 +61,21 @@ enum ProjectCompiler {
 
     /// One second of 64×64 black (bundled), used under photo-only edits so they can be exported.
     /// The asset is kept alive alongside its track (a track whose asset is gone can't be inserted).
-    nonisolated(unsafe) static let carrier: (asset: AVURLAsset, track: AVAssetTrack)? = {
+    nonisolated(unsafe) static let carrier: (asset: AVURLAsset, track: AVAssetTrack, duration: CMTime)? = {
         let url = Bundle(for: GradeState.self).url(forResource: "carrier", withExtension: "mov")
             ?? Bundle.main.url(forResource: "carrier", withExtension: "mov")
         guard let url else { return nil }
         let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
         let done = DispatchSemaphore(value: 0)
         nonisolated(unsafe) var track: AVAssetTrack?
+        nonisolated(unsafe) var duration = CMTime.zero
         Task.detached {
             track = try? await asset.loadTracks(withMediaType: .video).first
+            duration = (try? await track?.load(.timeRange).duration) ?? .zero
             done.signal()
         }
         done.wait()
-        return track.map { (asset, $0) }
+        return track.map { (asset, $0, duration) }
     }()
     static var carrierTrack: AVAssetTrack? { carrier?.track }
 
@@ -209,9 +211,9 @@ enum ProjectCompiler {
         // any ("Operation Stopped"). A tiny black clip stretched under the whole edit gives it one; the
         // compositor never draws it.
         let hasFootage = composition.tracks(withMediaType: .video).contains { $0.segments.contains { !$0.isEmpty } }
-        if !hasFootage, total > 0, let carrier = Self.carrierTrack, let ct = newTrack(.video) {
-            let one = CMTimeRange(start: .zero, duration: carrier.timeRange.duration)
-            try ct.insertTimeRange(one, of: carrier, at: .zero)
+        if !hasFootage, total > 0, let carrier = Self.carrier, carrier.duration > .zero, let ct = newTrack(.video) {
+            let one = CMTimeRange(start: .zero, duration: carrier.duration)
+            try ct.insertTimeRange(one, of: carrier.track, at: .zero)
             ct.scaleTimeRange(CMTimeRange(start: .zero, duration: one.duration), toDuration: time(total))
         }
 

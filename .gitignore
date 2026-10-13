@@ -18,3 +18,6 @@ DerivedData/
 # Demo recording scratch files
 docs/media/demo-raw.*
 docs/media/demo.log
+
+# Release builds
+dist/

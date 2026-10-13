@@ -190,15 +190,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installPlaybackKeys()
     }
 
-    /// Settings saved under the app's earlier identifier (provider, model names, LUT, panels) are copied over once.
+    /// Settings saved under the app's earlier identifiers (provider, model names, LUT, panels, agents) are copied
+    /// over once each. Projects and API keys don't depend on the identifier.
     private static func migrateSettings() {
         let defaults = UserDefaults.standard
-        guard !defaults.bool(forKey: "migratedFromOldIdentifier"),
-              let old = UserDefaults(suiteName: "co.morpheusgh.eddie")?.persistentDomain(forName: "co.morpheusgh.eddie") else { return }
-        for (key, value) in old where defaults.object(forKey: key) == nil && !key.hasPrefix("NS") {
-            defaults.set(value, forKey: key)
+        for oldID in ["local.eddie", "co.morpheusgh.eddie"] where oldID != Bundle.main.bundleIdentifier {
+            let flag = "migratedFrom.\(oldID)"
+            guard !defaults.bool(forKey: flag),
+                  let old = UserDefaults(suiteName: oldID)?.persistentDomain(forName: oldID) else { continue }
+            for (key, value) in old where defaults.object(forKey: key) == nil && !key.hasPrefix("NS") && !key.hasPrefix("windowSizeReset") {
+                defaults.set(value, forKey: key)
+            }
+            defaults.set(true, forKey: flag)
         }
-        defaults.set(true, forKey: "migratedFromOldIdentifier")
     }
 
     /// Space plays/pauses, ←/→ step one frame, ⌫ deletes the selection, J/K/L shuttle, M marker, B blade,

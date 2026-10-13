@@ -112,6 +112,7 @@
 
 /* Begin PBXFileReference section */
 		056278B237549D70D7517F8C /* AgentTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentTools.swift; sourceTree = "<group>"; };
+		0AFF0630FE1785A993B2F48C /* Eddie.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Eddie.entitlements; sourceTree = "<group>"; };
 		0BC71D939CBFC502D264A53C /* GradeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GradeTests.swift; sourceTree = "<group>"; };
 		0E1AAD5C9D58B77F5E905E9A /* TimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineView.swift; sourceTree = "<group>"; };
 		12E8D407B17B9FA2C14B2089 /* music_test.m4a */ = {isa = PBXFileReference; path = music_test.m4a; sourceTree = "<group>"; };
@@ -229,6 +230,7 @@
 		464091F7B6FFC5297E3D7990 /* Eddie */ = {
 			isa = PBXGroup;
 			children = (
+				0AFF0630FE1785A993B2F48C /* Eddie.entitlements */,
 				A3502B25BB34BDC6C3055BAE /* Info.plist */,
 				007BE08CB2CC9AE16BD5260F /* Agent */,
 				74AF83E8880CFD2B52C50C02 /* AI */,
@@ -687,11 +689,12 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = local.eddie.mcp;
+				PRODUCT_BUNDLE_IDENTIFIER = com.deadalus.eddie.mcp;
 				PRODUCT_NAME = "eddie-mcp";
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
@@ -706,7 +709,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = local.eddie.mcp;
+				PRODUCT_BUNDLE_IDENTIFIER = com.deadalus.eddie.mcp;
 				PRODUCT_NAME = "eddie-mcp";
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
@@ -717,9 +720,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Eddie/Eddie.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Eddie/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Eddie;
@@ -730,7 +734,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = local.eddie;
+				PRODUCT_BUNDLE_IDENTIFIER = com.deadalus.eddie;
 				PRODUCT_NAME = Eddie;
 				SDKROOT = macosx;
 			};
@@ -740,6 +744,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Eddie/Eddie.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_HARDENED_RUNTIME = NO;
@@ -753,7 +758,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = local.eddie;
+				PRODUCT_BUNDLE_IDENTIFIER = com.deadalus.eddie;
 				PRODUCT_NAME = Eddie;
 				SDKROOT = macosx;
 			};
@@ -829,7 +834,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = local.eddie.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.deadalus.eddie.tests;
 				SDKROOT = macosx;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Eddie.app/Contents/MacOS/Eddie";
 			};
@@ -846,7 +851,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = local.eddie.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.deadalus.eddie.tests;
 				SDKROOT = macosx;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Eddie.app/Contents/MacOS/Eddie";
 			};
