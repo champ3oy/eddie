@@ -91,6 +91,7 @@
 		F06C7353CB434182DE62BF20 /* carrier.mov in Resources */ = {isa = PBXBuildFile; fileRef = 2E370A95CD22BC37AFC1D830 /* carrier.mov */; };
 		F67D0C7D4CE7C93FAF266795 /* VisionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AAED6A730D2B97BEEFFA6EA /* VisionModel.swift */; };
 		F821E9C04856EA82C2BA9686 /* Exporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B70331E733FC30EBE4492937 /* Exporter.swift */; };
+		FB7ADB8FA512C38193135EB7 /* long_speech.mov in Resources */ = {isa = PBXBuildFile; fileRef = 42565744D20E4802D76C753A /* long_speech.mov */; };
 		FFBA8C549332AA9865FD07B1 /* LiveGradeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F370332329258DC541EB92FD /* LiveGradeTests.swift */; };
 /* End PBXBuildFile section */
 
@@ -155,6 +156,7 @@
 		3C6A2F9675955ED699E4E753 /* photo_test.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = photo_test.jpg; sourceTree = "<group>"; };
 		40DA16F2FA74D0CB5F9D54CC /* WindowRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowRecorder.swift; sourceTree = "<group>"; };
 		4205A9DEE6148EE299CECD70 /* CaptionTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptionTools.swift; sourceTree = "<group>"; };
+		42565744D20E4802D76C753A /* long_speech.mov */ = {isa = PBXFileReference; lastKnownFileType = video.quicktime; path = long_speech.mov; sourceTree = "<group>"; };
 		4402A7E4A5561CA14446FE1B /* MediaBinView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaBinView.swift; sourceTree = "<group>"; };
 		459F9B1F7F72538BB3532B7B /* GradeRecipe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GradeRecipe.swift; sourceTree = "<group>"; };
 		48F49E23F37F39846CE89E63 /* EditingAgentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditingAgentTests.swift; sourceTree = "<group>"; };
@@ -368,6 +370,7 @@
 			isa = PBXGroup;
 			children = (
 				63805808A9E8C45A22D887AA /* log_test_10bit.mov */,
+				42565744D20E4802D76C753A /* long_speech.mov */,
 				E2A92D32CAFFAA4345F09A40 /* moving.mov */,
 				12E8D407B17B9FA2C14B2089 /* music_test.m4a */,
 				CE3329C7143936F956B29ED9 /* normal_blue.mov */,
@@ -564,6 +567,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				CDEB77C4AED3CE6921855772 /* log_test_10bit.mov in Resources */,
+				FB7ADB8FA512C38193135EB7 /* long_speech.mov in Resources */,
 				AE5D8463E8A10FED634C6440 /* moving.mov in Resources */,
 				C8B4055E21674091254D7863 /* music_test.m4a in Resources */,
 				C03B3BB2630FBBFA52E9B246 /* normal_blue.mov in Resources */,

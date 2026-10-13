@@ -21,6 +21,8 @@ struct InspectorView: View {
                         MusicSection(item: music)
                     } else if let title = model.selectedTitle {
                         TitleSection(item: title)
+                    } else if let effect = model.selectedEffect {
+                        EffectSection(item: effect)
                     } else {
                         if let clip = model.selectedClip {
                             ClipSection(clip: clip)

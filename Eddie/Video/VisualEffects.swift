@@ -19,11 +19,15 @@ enum VisualEffects {
             case .sharpen:
                 out = out.applyingFilter("CISharpenLuminance", parameters: [kCIInputSharpnessKey: a * 2, "inputRadius": 2.5])
             case .vignette:
-                out = out.applyingFilter("CIVignetteEffect", parameters: [
+                // Bright in the middle, falling off to dark corners (multiplied in).
+                let half = hypot(extent.width, extent.height) / 2
+                let edge = CGFloat(1 - 0.85 * a)
+                let shade = CIFilter(name: "CIRadialGradient", parameters: [
                     kCIInputCenterKey: CIVector(x: extent.midX, y: extent.midY),
-                    kCIInputRadiusKey: max(extent.width, extent.height) * 0.45,
-                    kCIInputIntensityKey: a * 1.2, "inputFalloff": 0.6,
-                ])
+                    "inputRadius0": half * (0.55 - 0.2 * a), "inputRadius1": half,
+                    "inputColor0": CIColor.white, "inputColor1": CIColor(red: edge, green: edge, blue: edge),
+                ])!.outputImage!.cropped(to: extent)
+                out = shade.applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: out]).cropped(to: extent)
             case .grain:
                 out = grain(out, amount: a, time: time)
             case .glitch:

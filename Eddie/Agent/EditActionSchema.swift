@@ -88,8 +88,10 @@ enum EditActionSchema {
     - translate_captions: language ("Spanish", "French"…), bilingual (true keeps the original line too).
     - remove_fillers: — cut "um", "uh"… out of the edit. remove_pauses: duration (minimum pause, default 0.7 s).
     Look:
-    - effect: clip or overlay (or "all"), kind ("blur" | "sharpen" | "vignette" | "grain" | "glitch" | "shake" | "vhs" | \
-    "lightLeak" | "pixelate" | "mirror" | "none"), amount (0–1; 0 removes that effect).
+    - effect: kind ("blur" | "sharpen" | "vignette" | "grain" | "glitch" | "shake" | "vhs" | "lightLeak" | "pixelate" | \
+    "mirror" | "none"), amount (0–1). Effects sit on their own effects lane and act on everything under them for a stretch of \
+    time: give at + duration (seconds), or clip (c1…, its span) or "all" (whole video). target e1… changes an existing \
+    effect (kind, amount, at, duration); amount 0 or kind "none" removes it. target an overlay o1… to affect only that overlay.
     - mask: clip or overlay, kind ("circle" | "rectangle" | "linear" | "none"), x and y (center, 0–1 of the picture, y \
     down), width and height (0–1.5) or size for both, feather (0–1 soft edge), rotation, invert.
     - green_screen: clip or overlay, optional color ("#00FF00" default), amount (strength 0–1), feather (edge softness), \
@@ -115,6 +117,6 @@ enum EditActionSchema {
     - track: target (an overlay o1… placed over something), at (start time) — the overlay follows that thing.
 
     Labels: c1, c2… are clips in their current order; o1… overlays; t1… titles; m1… songs, voiceovers and sound \
-    effects; k1… markers. Labels are renumbered after every edit, so always use the labels from the latest timeline.
+    effects; e1… effects-lane effects; k1… markers. Labels are renumbered after every edit, so always use the labels from the latest timeline.
     """
 }

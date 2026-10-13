@@ -26,6 +26,8 @@ enum AgentTools {
         case "auto_grade": return await autoGrade(args, model)
         case "control": return control(args, model)
         case "export": return await export(args, model)
+        case "debug_ui" where debugEnabled: return debugUI(model)
+        case "debug_viewer" where debugEnabled: return debugViewer(model)
         default: return .fail("Unknown tool \(tool).")
         }
     }
@@ -281,6 +283,42 @@ enum AgentTools {
         }
         let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.int64Value ?? 0
         return Reply(text: "Exported \(url.path) (\(ByteCountFormatter.string(fromByteCount: size, countStyle: .file))).")
+    }
+
+    // MARK: Debugging (EDDIE_DEBUG=1 only)
+
+    nonisolated static var debugEnabled: Bool { ProcessInfo.processInfo.environment["EDDIE_DEBUG"] == "1" }
+
+    /// The window as an image, plus where named controls are on screen (Quartz coordinates: top-left origin).
+    static func debugUI(_ model: EditorModel) -> Reply {
+        guard let window = NSApp.windows.first(where: { $0.isVisible && $0.canBecomeMain }), let content = window.contentView else {
+            return .fail("No window.")
+        }
+        let screenHeight = NSScreen.screens.first?.frame.height ?? 0
+        var anchors: [String: [Double]] = [:]
+        for (key, f) in DemoAnchors.shared.frames {
+            let inWindow = content.convert(NSPoint(x: f.midX, y: content.isFlipped ? f.midY : content.bounds.height - f.midY), to: nil)
+            let p = window.convertPoint(toScreen: inWindow)
+            anchors[key] = [Double(p.x), Double(screenHeight - p.y), Double(f.width), Double(f.height)]
+        }
+        var image: Data?
+        if let frameView = content.superview, let rep = frameView.bitmapImageRepForCachingDisplay(in: frameView.bounds) {
+            frameView.cacheDisplay(in: frameView.bounds, to: rep)
+            image = rep.representation(using: .jpeg, properties: [.compressionFactor: 0.7])
+        }
+        let json = (try? JSONSerialization.data(withJSONObject: anchors, options: [.sortedKeys])).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+        return Reply(text: json, image: image)
+    }
+
+    /// What the viewer is showing right now.
+    static func debugViewer(_ model: EditorModel) -> Reply {
+        guard let buffer = model.scope.lastFrame else { return .fail("No viewer frame yet.") }
+        let image = CIImage(cvPixelBuffer: buffer)
+        guard let cg = GradeRenderer.shared.context.createCGImage(image, from: image.extent),
+              let jpeg = NSBitmapImageRep(cgImage: cg).representation(using: .jpeg, properties: [.compressionFactor: 0.7]) else {
+            return .fail("Couldn't read the viewer.")
+        }
+        return Reply(text: "Viewer frame \(Int(image.extent.width))×\(Int(image.extent.height)) at \(String(format: "%.2f", model.clock.time)) s", image: jpeg)
     }
 
     // MARK: Helpers

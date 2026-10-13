@@ -333,6 +333,7 @@ enum ProjectCompiler {
         return GradeState.Snapshot(recipe: .neutral, lut: lut, mode: mode, split: split, recipes: recipes, titles: project.titles,
                                    clips: clips, overlayOpacity: opacity, overlayBlend: blend, overlayLane: lanes,
                                    hiddenLanes: project.hiddenLanes, blurBackground: project.format.blurBackground,
+                                   effects: project.effects,
                                    fill: project.format.fill, fadeOut: project.fadeOut, duration: project.duration)
     }
 }

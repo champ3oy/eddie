@@ -183,7 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillFinishLaunching(_ notification: Notification) {
-        if DemoDirector.requested { DemoAnchors.enabled = true }
+        if DemoDirector.requested || AgentTools.debugEnabled { DemoAnchors.enabled = true }
         Self.migrateSettings()
         // Dark only: windows, menus, popovers and Settings.
         NSApp.appearance = NSAppearance(named: .darkAqua)

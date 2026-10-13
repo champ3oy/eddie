@@ -23,6 +23,7 @@ struct TimelineView: View {
     @State private var trimOrigin: (start: Double, end: Double)?
     @State private var musicOrigin: MusicItem?
     @State private var titleOrigin: TitleItem?
+    @State private var effectOrigin: EffectItem?
     /// Where a dragged edge snapped to (drawn as a yellow line).
     @State private var snapGuide: Double?
     // True while each kind of drag is in progress; they reset by themselves when macOS cancels a drag,
@@ -58,7 +59,7 @@ struct TimelineView: View {
     private var overlayLanes: Int { max(1, (model.project.overlays.map(\.lane).max() ?? 0) + 1) }
     private var overlayLanesHeight: CGFloat { CGFloat(overlayLanes) * overlayHeight + CGFloat(overlayLanes - 1) * gap }
     private var musicLanesHeight: CGFloat { CGFloat(audioLanes) * musicHeight + CGFloat(audioLanes - 1) * gap }
-    private var lanesHeight: CGFloat { titleHeight * 2 + overlayLanesHeight + gradeHeight + videoHeight + audioHeight + musicLanesHeight + gap * 6 }
+    private var lanesHeight: CGFloat { titleHeight * 3 + overlayLanesHeight + gradeHeight + videoHeight + audioHeight + musicLanesHeight + gap * 7 }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -118,7 +119,7 @@ struct TimelineView: View {
             if x > scrollX + viewport - 30 || x < scrollX { scrollPosition.scrollTo(x: max(0, x - 30)) }
         }
         .onChange(of: titleDragActive) { _, active in
-            if !active, titleOrigin != nil { titleOrigin = nil; snapGuide = nil; model.endInteraction() }
+            if !active, titleOrigin != nil || effectOrigin != nil { titleOrigin = nil; effectOrigin = nil; snapGuide = nil; model.endInteraction() }
         }
     }
 
@@ -134,7 +135,7 @@ struct TimelineView: View {
     /// The whole edit plus room after it (half a screen, or up to the last title/song/overlay).
     private func contentWidth(pps: CGFloat, viewport: CGFloat) -> CGFloat {
         let p = model.project
-        let lastItem = ([p.duration] + p.music.map(\.end) + p.titles.map(\.end) + p.overlays.map(\.end)).max() ?? 0
+        let lastItem = ([p.duration] + p.music.map(\.end) + p.titles.map(\.end) + p.overlays.map(\.end) + p.effects.map(\.end)).max() ?? 0
         return max(viewport, CGFloat(lastItem) * pps + viewport * 0.5)
     }
 
@@ -372,6 +373,7 @@ struct TimelineView: View {
         VStack(spacing: gap) {
             laneIcon("textformat", key: "titles", name: "titles", height: titleHeight)
             laneIcon("captions.bubble", key: "captions", name: "captions", height: titleHeight)
+            laneIcon("sparkles", key: "effects", name: "effects", height: titleHeight)
             ForEach((0..<overlayLanes).reversed(), id: \.self) { i in
                 laneIcon("rectangle.on.rectangle", key: Project.overlayLane(i), name: "overlay lane \(i + 1)", height: overlayHeight)
             }
@@ -442,7 +444,8 @@ struct TimelineView: View {
         let starts = model.project.starts
         let titleTop = rulerHeight + 6
         let captionTop = titleTop + titleHeight + gap
-        let overlayTop = captionTop + titleHeight + gap
+        let effectTop = captionTop + titleHeight + gap
+        let overlayTop = effectTop + titleHeight + gap
         let laneTop = overlayTop + overlayLanesHeight + gap
         let playheadX = CGFloat(clock.time) * pps
         return ZStack(alignment: .topLeading) {
@@ -476,6 +479,15 @@ struct TimelineView: View {
                     .opacity(st.hidden ? 0.35 : 1)
                     .allowsHitTesting(!st.locked)
                     .offset(y: item.isCaption ? captionTop : titleTop)
+            }
+
+            // Effects lane: each effect acts on everything under it for its stretch of time
+            ForEach(model.project.effects) { item in
+                let st = laneState("effects")
+                effectBlock(item, pps: pps)
+                    .opacity(st.hidden ? 0.35 : 1)
+                    .allowsHitTesting(!st.locked)
+                    .offset(y: effectTop)
             }
 
             // Overlay lane (B-roll, picture-in-picture)
@@ -536,6 +548,7 @@ struct TimelineView: View {
                                       setOut: { v in model.updateClip(clip.id, undo: .none) { $0.audioFadeOut = v } })
                         }
                     }
+                    .demoAnchor("sound-\(clip.id)")
                     .onHover { hoverKey = $0 ? "sound-\(clip.id)" : (hoverKey == "sound-\(clip.id)" ? nil : hoverKey) }
                     .offset(x: clipX(clip, pps: pps) + 1, y: laneTop + gradeHeight + videoHeight + gap * 2)
                     .onTapGesture(coordinateSpace: .named("timeline")) { loc in tap(clip.id, at: loc, pps: pps) }
@@ -810,13 +823,14 @@ struct TimelineView: View {
                 }
             }
             .allowsHitTesting(false)
-            // Dots sit at least 16 pt in from the edge, clear of the trim handles.
-            if showIn && (active || fi > 0.5) && width > 40 {
-                fadeDot(key: key + "-in", x: max(16, fi), value: fadeIn, limit: limit, pps: pps, sign: 1, set: setIn,
+            // Dots sit at least 16 pt in from the edge (clear of the trim handles) and never cross the middle, so
+            // they can't overlap; on blocks too short to drag them, they hide (zoom in, or use the inspector).
+            if showIn && (active || fi > 0.5) && width >= 60 {
+                fadeDot(key: key + "-in", x: min(max(16, fi), showOut ? width / 2 - 8 : width - 16), value: fadeIn, limit: limit, pps: pps, sign: 1, set: setIn,
                         help: "Drag to fade the \(hint) in")
             }
-            if showOut && (active || fo > 0.5) && width > 40 {
-                fadeDot(key: key + "-out", x: min(width - 16, width - fo), value: fadeOut, limit: limit, pps: pps, sign: -1, set: setOut,
+            if showOut && (active || fo > 0.5) && width >= 60 {
+                fadeDot(key: key + "-out", x: max(min(width - 16, width - fo), showIn ? width / 2 + 8 : 16), value: fadeOut, limit: limit, pps: pps, sign: -1, set: setOut,
                         help: "Drag to fade the \(hint) out")
             }
         }
@@ -831,6 +845,7 @@ struct TimelineView: View {
             .shadow(color: .black.opacity(0.6), radius: 1.5)
             .padding(5)
             .contentShape(Circle())
+            .demoAnchor("fade-\(key)")
             .position(x: x, y: 6)
             .pointerStyle(.columnResize)
             .help(help)
@@ -865,7 +880,7 @@ struct TimelineView: View {
     private func volumeLine(_ id: UUID, points: [VolumePoint], width: CGFloat, height: CGFloat, pps: CGFloat, active: Bool) -> some View {
         let top: CGFloat = 4, bottom = height - 4
         let y = { (level: Double) in bottom - (bottom - top) * CGFloat(level) }
-        if active || !points.isEmpty {
+        if !points.isEmpty {
             ZStack(alignment: .topLeading) {
                 Canvas { ctx, size in
                     var path = Path()
@@ -884,6 +899,7 @@ struct TimelineView: View {
                         .frame(width: 7, height: 7)
                         .padding(4)
                         .contentShape(Circle())
+                        .demoAnchor("vol-\(p.id)")
                         .position(x: CGFloat(p.time) * pps, y: y(p.level))
                         .pointerStyle(.grabIdle)
                         .highPriorityGesture(DragGesture(minimumDistance: 0, coordinateSpace: .named("timeline"))
@@ -904,9 +920,9 @@ struct TimelineView: View {
         }
     }
 
-    /// Double-clicking an audio block adds a volume point where you clicked.
+    /// ⌥-clicking an audio block adds a volume point where you clicked (then drag it up or down).
     private func addVolumePointGesture(_ id: UUID, height: CGFloat, pps: CGFloat) -> some Gesture {
-        SpatialTapGesture(count: 2).onEnded { v in
+        SpatialTapGesture(count: 1).modifiers(.option).onEnded { v in
             let top: CGFloat = 4, bottom = height - 4
             let level = Double((bottom - min(max(v.location.y, top), bottom)) / (bottom - top))
             model.addVolumePoint(id, time: Double(v.location.x / pps), level: level)
@@ -918,11 +934,12 @@ struct TimelineView: View {
     private func transitionBadge(_ clip: ClipItem, index: Int) -> some View {
         let has = clip.transitionIn != nil
         return Button { transitionEditor = clip.id } label: {
-            Image(systemName: index == 0 ? (has ? "circle.righthalf.filled" : "circle.dashed") : (has ? "diamond.fill" : "diamond"))
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(has ? Color.white : Ink.secondary)
+            BowTie()
+                .fill(has ? Color.black : Color.white.opacity(0.9))
+                .frame(width: 10, height: 8)
                 .frame(width: 18, height: 18)
-                .background(Circle().fill(Color.black.opacity(0.7)))
+                .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(has ? Color.white : Color.black.opacity(0.75)))
+                .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(Color.white.opacity(has ? 0 : 0.6), lineWidth: 1))
         }
         .buttonStyle(.plain)
         .help(index == 0 ? "Fade in from black" : (clip.transitionIn.map { $0.kind.label } ?? "Add a transition"))
@@ -1178,6 +1195,76 @@ struct TimelineView: View {
                 .onEnded { _ in titleOrigin = nil; snapGuide = nil; model.endInteraction() })
     }
 
+    private func effectBlock(_ item: EffectItem, pps: CGFloat) -> some View {
+        let selected = model.selectedIDs.contains(item.id)
+        return ZStack(alignment: .leading) {
+            RoundedRectangle(cornerRadius: TrackColor.radius, style: .continuous).fill(TrackColor.effect)
+            HStack(spacing: 5) {
+                Image(systemName: item.kind.icon).font(.system(size: 10, weight: .semibold))
+                Text(item.kind.label).font(.system(size: 10.5, weight: .medium)).lineLimit(1)
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 8)
+            if selected {
+                HStack {
+                    effectTrimHandle(item, leading: true, pps: pps)
+                    Spacer(minLength: 0)
+                    effectTrimHandle(item, leading: false, pps: pps)
+                }
+            }
+        }
+        .frame(width: max(8, CGFloat(item.duration) * pps), height: titleHeight)
+        .clipShape(RoundedRectangle(cornerRadius: TrackColor.radius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: TrackColor.radius, style: .continuous)
+            .strokeBorder(selected ? Color.white : .clear, lineWidth: 2))
+        .demoAnchor("effect-\(item.kind.rawValue)")
+        .offset(x: CGFloat(item.start) * pps)
+        .onTapGesture(coordinateSpace: .named("timeline")) { loc in tap(item.id, at: loc, pps: pps) }
+        .gesture(DragGesture(minimumDistance: 4, coordinateSpace: .named("timeline"))
+            .updating($titleDragActive) { _, active, _ in active = true }
+            .onChanged { v in
+                if effectOrigin == nil { effectOrigin = item; model.beginInteraction(); model.selection = item.id }
+                guard let o = effectOrigin else { return }
+                let start = snappedMove(o.start + Double(v.translation.width / pps), length: o.duration, pps: pps, excluding: item.id)
+                model.updateEffect(item.id, undo: .none) { $0.start = start }
+            }
+            .onEnded { _ in effectOrigin = nil; snapGuide = nil; model.endInteraction() })
+        .contextMenu {
+            Menu("Effect") {
+                ForEach(ClipEffect.Kind.allCases) { k in
+                    Button { model.updateEffect(item.id, undo: .push) { $0.kind = k } } label: { Label(k.label, systemImage: k.icon) }
+                }
+            }
+            Button("Delete", role: .destructive) { model.selection = item.id; model.deleteSelection() }
+        }
+    }
+
+    private func effectTrimHandle(_ item: EffectItem, leading: Bool, pps: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: 3)
+            .fill(Color.white)
+            .frame(width: 6)
+            .contentShape(Rectangle().inset(by: -4))
+            .pointerStyle(.columnResize)
+            .demoAnchor("effect-trim-\(leading ? "in" : "out")")
+            .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .named("timeline"))
+                .updating($titleDragActive) { _, active, _ in active = true }
+                .onChanged { v in
+                    if effectOrigin == nil { effectOrigin = item; model.beginInteraction() }
+                    guard let o = effectOrigin else { return }
+                    let edge = snapped((leading ? o.start : o.end) + Double(v.translation.width / pps), pps: pps, excluding: item.id)
+                    model.updateEffect(item.id, undo: .none) { e in
+                        if leading {
+                            let start = min(max(0, edge), o.end - EffectItem.minLength)
+                            e.start = start
+                            e.duration = o.end - start
+                        } else {
+                            e.duration = max(EffectItem.minLength, edge - o.start)
+                        }
+                    }
+                }
+                .onEnded { _ in effectOrigin = nil; snapGuide = nil; model.endInteraction() })
+    }
+
     // MARK: Snapping
 
     /// Snaps a time to the playhead and to clip/title/song edges within 8 points, and shows the guide.
@@ -1380,6 +1467,11 @@ private struct ClipLabel: View {
                 Text(TimelineView.speedLabel(clip.speed)).font(.system(size: 10, weight: .bold).monospacedDigit())
             }
             if clip.audioMuted { Image(systemName: "speaker.slash.fill").font(.system(size: 9)) }
+            if !clip.effects.isEmpty {
+                Text("fx").font(.system(size: 9.5, weight: .heavy)).help(clip.effects.map(\.kind.label).joined(separator: ", "))
+            }
+            if clip.mask != nil { Image(systemName: "circle.dashed.inset.filled").font(.system(size: 9)).help("Masked") }
+            if clip.chromaKey != nil { Image(systemName: "person.and.background.dotted").font(.system(size: 9)).help("Green screen") }
             Text(clip.name).font(.system(size: 10.5, weight: .medium)).lineLimit(1)
         }
         .foregroundStyle(.white)
@@ -1550,5 +1642,15 @@ struct SpeechSheet: View {
         .frame(width: 460)
         .background(Color.black)
         .preferredColorScheme(.dark)
+    }
+}
+
+/// The transition mark at a cut: two triangles meeting in the middle.
+struct BowTie: Shape {
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: r.minX, y: r.minY)); p.addLine(to: CGPoint(x: r.midX, y: r.midY)); p.addLine(to: CGPoint(x: r.minX, y: r.maxY)); p.closeSubpath()
+        p.move(to: CGPoint(x: r.maxX, y: r.minY)); p.addLine(to: CGPoint(x: r.midX, y: r.midY)); p.addLine(to: CGPoint(x: r.maxX, y: r.maxY)); p.closeSubpath()
+        return p
     }
 }

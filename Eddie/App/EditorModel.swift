@@ -183,6 +183,7 @@ final class EditorModel: ObservableObject {
     var selectedOverlay: OverlayItem? { project.overlays.first { $0.id == selection } }
     var selectedMusic: MusicItem? { project.music.first { $0.id == selection } }
     var selectedTitle: TitleItem? { project.titles.first { $0.id == selection } }
+    var selectedEffect: EffectItem? { project.effects.first { $0.id == selection } }
     /// Edges stick to the playhead and to clip, title and song edges while dragging.
     @Published var snapping = true
     /// Source media of the selected clip (or the first clip).
@@ -321,7 +322,7 @@ final class EditorModel: ObservableObject {
 
     static func contains(_ p: Project, _ id: UUID) -> Bool {
         p.clips.contains { $0.id == id } || p.overlays.contains { $0.id == id } || p.music.contains { $0.id == id }
-            || p.titles.contains { $0.id == id } || p.markers.contains { $0.id == id }
+            || p.titles.contains { $0.id == id } || p.markers.contains { $0.id == id } || p.effects.contains { $0.id == id }
     }
 
     /// Everything that needs a new composition (not grades).
@@ -1637,10 +1638,30 @@ final class EditorModel: ObservableObject {
         return url
     }
 
-    func addEffect(_ kind: ClipEffect.Kind, to id: UUID? = nil) {
-        updateClip(id, undo: .push) { c in
-            if !c.effects.contains(where: { $0.kind == kind }) { c.effects.append(ClipEffect(kind: kind, amount: kind == .mirror ? 1 : 0.5)) }
+    /// Puts an effect on the effects lane: over the given (or selected) clip's stretch of the timeline,
+    /// or 3 seconds from the playhead. It's selected so its edges can be dragged right away.
+    @discardableResult
+    func addEffect(_ kind: ClipEffect.Kind, to id: UUID? = nil, at: Double? = nil, duration: Double? = nil, amount: Double? = nil) -> UUID {
+        var item = EffectItem(kind: kind, amount: amount ?? (kind == .mirror ? 1 : 0.5), start: 0)
+        let target = id ?? selectedClip?.id
+        if let at {
+            item.start = max(0, at)
+            item.duration = max(EffectItem.minLength, duration ?? 3)
+        } else if let target, let s = project.start(of: target) ?? project.overlays.first(where: { $0.id == target })?.start,
+                  let c = project.clip(target) {
+            item.start = s
+            item.duration = max(EffectItem.minLength, duration ?? c.duration)
+        } else {
+            item.start = clock.time
+            item.duration = max(EffectItem.minLength, duration ?? min(3, max(EffectItem.minLength, project.duration - clock.time)))
         }
+        mutate(.push) { $0.effects.append(item) }
+        selection = item.id
+        return item.id
+    }
+
+    func updateEffect(_ id: UUID, undo: UndoMode = .coalesce, _ change: (inout EffectItem) -> Void) {
+        mutate(undo) { $0.updateEffect(id, change) }
     }
 
     func toggleLaneHidden(_ lane: String) {
@@ -2362,6 +2383,8 @@ final class ScopeMonitor: ObservableObject {
     @Published private(set) var histogram: Histogram?
     private var output: AVPlayerItemVideoOutput?
     private weak var item: AVPlayerItem?
+    /// The last frame the viewer showed (for the debug tools).
+    private(set) var lastFrame: CVPixelBuffer?
     private var timer: Timer?
     private let queue = DispatchQueue(label: "eddie.scope", qos: .utility)
     private var computing = false
@@ -2386,6 +2409,7 @@ final class ScopeMonitor: ObservableObject {
         guard output.hasNewPixelBuffer(forItemTime: time),
               let buffer = output.copyPixelBuffer(forItemTime: time, itemTimeForDisplay: nil) else { return }
         computing = true
+        lastFrame = buffer
         nonisolated(unsafe) let pixels = buffer
         queue.async { [weak self] in
             CVPixelBufferLockBaseAddress(pixels, .readOnly)

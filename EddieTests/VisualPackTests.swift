@@ -118,6 +118,27 @@ final class VisualPackTests: XCTestCase {
         }
     }
 
+    /// Effects on the effects lane only act during their stretch of time, on everything under them.
+    func testEffectsLaneAppliesOnlyInItsRange() async throws {
+        let white = try solid(1, 1, 1)
+        var p = Project(clips: [main()])
+        p.overlays = [overlay(white) { $0.transform = .identity }]
+        let corner = CGRect(x: 0.0, y: 0.0, width: 0.08, height: 0.08)
+        let plain = try await rgb(p, photos: [white], region: corner)
+        let plainCenter = try await rgb(p, photos: [white])
+        p.effects = [EffectItem(kind: .vignette, amount: 1, start: 1.5, duration: 0.5)]
+        let before = try await rgb(p, photos: [white], region: corner)
+        XCTAssertEqual(before[0], plain[0], accuracy: 0.02, "at 1 s the effect hasn't started")
+        p.effects[0].start = 0.5; p.effects[0].duration = 1
+        let during = try await rgb(p, photos: [white], region: corner)
+        XCTAssertLessThan(during[0], plain[0] - 0.2, "inside its range the corners darken")
+        let center = try await rgb(p, photos: [white])
+        XCTAssertEqual(center[0], plainCenter[0], accuracy: 0.08, "a vignette leaves the middle alone")
+        p.hiddenLanes = ["effects"]
+        let hidden = try await rgb(p, photos: [white], region: corner)
+        XCTAssertEqual(hidden[0], plain[0], accuracy: 0.02, "hiding the effects lane turns them off")
+    }
+
     func testHiddenLanesAndOverlayOrder() async throws {
         let red = try solid(1, 0, 0), green = try solid(0, 1, 0)
         var p = Project(clips: [main()])

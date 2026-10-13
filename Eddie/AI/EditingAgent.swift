@@ -94,8 +94,10 @@ struct TimelineLabels {
     var music: [String: UUID] = [:]
     var overlays: [String: UUID] = [:]
     var markers: [String: UUID] = [:]
+    var effects: [String: UUID] = [:]
 
     init(_ p: Project) {
+        for (i, e) in p.effects.enumerated() { effects["e\(i + 1)"] = e.id }
         for (i, c) in p.clips.enumerated() { clips["c\(i + 1)"] = c.id }
         for (i, o) in p.overlays.enumerated() { overlays["o\(i + 1)"] = o.id }
         for (i, m) in p.markers.enumerated() { markers["k\(i + 1)"] = m.id }
@@ -157,6 +159,12 @@ enum TimelineDescriber {
         if p.music.isEmpty { lines.append("  (none)") }
         for (i, m) in p.music.enumerated() {
             lines.append("  m\(i + 1) (\(m.kind.rawValue)\(m.beats.isEmpty ? "" : ", beats found")): \"\(m.name)\" at \(t(m.start))–\(t(m.end)), starts \(t(m.sourceStart)) into the song, volume \(Int((m.volume * 100).rounded()))%, fade in \(t(m.fadeIn)), fade out \(t(m.fadeOut))")
+        }
+        if !p.effects.isEmpty {
+            lines.append("Effects lane:")
+            for (i, e) in p.effects.enumerated() {
+                lines.append("  e\(i + 1): \(e.kind.rawValue) \(Int((e.amount * 100).rounded()))% at \(t(e.start))–\(t(e.end))")
+            }
         }
         if !p.hiddenLanes.isEmpty { lines.append("Hidden lanes: " + p.hiddenLanes.sorted().joined(separator: ", ")) }
         if !p.lockedLanes.isEmpty { lines.append("Locked lanes: " + p.lockedLanes.sorted().joined(separator: ", ")) }
@@ -240,7 +248,7 @@ enum EditExecutor {
 
             case "delete":
                 let label = a.target ?? a.clip ?? a.title ?? a.music
-                guard let l = label, let id = clipID(l) ?? titleID(l) ?? musicID(l) ?? overlayID(l) ?? labels.markers[l.lowercased()] else { errors.append("delete: unknown \(label ?? "?")"); continue }
+                guard let l = label, let id = clipID(l) ?? titleID(l) ?? musicID(l) ?? overlayID(l) ?? labels.markers[l.lowercased()] ?? labels.effects[l.lowercased()] else { errors.append("delete: unknown \(label ?? "?")"); continue }
                 p.remove(id)
                 log.append("Deleted \(l)")
 
@@ -494,24 +502,49 @@ enum EditExecutor {
             // MARK: Look
 
             case "effect":
-                guard let ids = anyClipTargets(a.clip ?? a.target) else { errors.append("effect: unknown clip \(a.clip ?? "?")"); continue }
+                let label = (a.target ?? a.clip)?.lowercased()
                 let name = (a.kind ?? "").lowercased()
-                if name == "none" {
-                    for id in ids { p.updateClip(id) { $0.effects = [] } }
-                    log.append("Removed effects"); continue
-                }
-                guard let kind = ClipEffect.Kind.allCases.first(where: { $0.rawValue.lowercased() == name || $0.label.lowercased() == name }) else {
+                let kind = ClipEffect.Kind.allCases.first(where: { $0.rawValue.lowercased() == name || $0.label.lowercased() == name })
+                guard kind != nil || name == "none" || (name.isEmpty && label?.hasPrefix("e") == true) else {
                     errors.append("effect kind must be one of \(ClipEffect.Kind.allCases.map(\.rawValue).joined(separator: ", ")) or none"); continue
                 }
-                let amount = min(max(a.amount ?? 0.5, 0), 1)
-                for id in ids {
-                    p.updateClip(id) { c in
+                // An existing effect on the effects lane (e1…): change, move, retime or remove it.
+                if let l = label, let eid = labels.effects[l] {
+                    if name == "none" || (a.amount ?? 1) <= 0.001 { p.remove(eid); log.append("Removed \(l)"); continue }
+                    p.updateEffect(eid) { e in
+                        if let kind { e.kind = kind }
+                        if let v = a.amount { e.amount = min(max(v, 0), 1) }
+                        if let at = a.at { e.start = max(0, at) }
+                        if let d = a.duration { e.duration = max(EffectItem.minLength, d) }
+                    }
+                    log.append("Changed \(l)"); continue
+                }
+                let amount = min(max(a.amount ?? (kind == .mirror ? 1 : 0.5), 0), 1)
+                // Overlays keep their own effects (they only touch that overlay).
+                if let l = label, let oid = overlayID(l) {
+                    p.updateClip(oid) { c in
+                        guard let kind else { c.effects = []; return }
                         if amount <= 0.001 { c.effects.removeAll { $0.kind == kind } }
                         else if let i = c.effects.firstIndex(where: { $0.kind == kind }) { c.effects[i].amount = amount }
                         else { c.effects.append(ClipEffect(kind: kind, amount: amount)) }
                     }
+                    log.append("\(kind?.label ?? "No effects") on \(l)"); continue
                 }
-                log.append("\(kind.label) on \(a.clip ?? a.target!)")
+                // Otherwise it goes on the effects lane, for a stretch of time: `at`/`duration`, or a clip's span.
+                var span: (Double, Double)?
+                if let at = a.at { span = (max(0, at), max(EffectItem.minLength, a.duration ?? 3)) }
+                else if label == "all" { span = (0, p.duration) }
+                else if let l = label, let cid = clipID(l), let s = p.start(of: cid), let c = p.clip(cid) { span = (s, a.duration ?? c.duration) }
+                else if label == nil { span = (playhead, a.duration ?? 3) }
+                guard let (start, duration) = span else { errors.append("effect: unknown target \(label ?? "?")"); continue }
+                guard let kind, amount > 0.001 else {
+                    // "none": clear the lane over that stretch (and old per-clip effects on those clips).
+                    p.effects.removeAll { $0.start < start + duration && $0.end > start }
+                    if let ids = anyClipTargets(label) { for id in ids { p.updateClip(id) { $0.effects.removeAll { kind == nil || $0.kind == kind } } } }
+                    log.append("Removed effects \(String(format: "%.1f–%.1f s", start, start + duration))"); continue
+                }
+                p.effects.append(EffectItem(kind: kind, amount: amount, start: start, duration: max(EffectItem.minLength, duration)))
+                log.append(String(format: "%@ from %.1f to %.1f s", kind.label, start, start + duration))
 
             case "mask":
                 guard let ids = anyClipTargets(a.clip ?? a.target) else { errors.append("mask: unknown clip \(a.clip ?? "?")"); continue }

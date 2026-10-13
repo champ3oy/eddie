@@ -152,3 +152,15 @@ enum SpeedRamp: String, CaseIterable, Identifiable {
         }
     }
 }
+
+/// An effect on the effects lane: applies to everything in the picture under it, for its stretch of time.
+struct EffectItem: Codable, Equatable, Identifiable {
+    var id = UUID()
+    var kind: ClipEffect.Kind
+    var amount = 0.5
+    /// Timeline seconds.
+    var start: Double
+    var duration: Double = 3
+    var end: Double { start + duration }
+    static let minLength = 0.2
+}

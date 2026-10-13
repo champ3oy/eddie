@@ -277,16 +277,16 @@ struct EffectsCard: View {
             Menu {
                 ForEach(ClipEffect.Kind.allCases) { k in
                     Button { model.addEffect(k, to: clip.id) } label: { Label(k.label, systemImage: k.icon) }
-                        .disabled(clip.effects.contains { $0.kind == k })
                 }
             } label: { Image(systemName: "plus").font(.system(size: 10, weight: .bold)).foregroundStyle(Ink.secondary) }
             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
             .help("Add an effect")
         )) {
             if clip.effects.isEmpty {
-                Text("Blur, grain, glitch, VHS, light leaks, shake and more — add with +.")
+                Text("Blur, grain, glitch, VHS, light leaks, shake and more — add with +. Each lands on the effects lane over this clip; drag its edges to cover just part.")
                     .font(.system(size: 11)).foregroundStyle(Ink.tertiary)
             }
+            // Older projects kept effects on the clip itself; they still show (and can be removed) here.
             ForEach(clip.effects) { e in
                 HStack(spacing: 6) {
                     if e.kind == .mirror {
@@ -304,6 +304,42 @@ struct EffectsCard: View {
                     .buttonStyle(.plain).foregroundStyle(Ink.secondary).help("Remove \(e.kind.label)")
                 }
             }
+        }
+    }
+}
+
+/// A selected effect on the effects lane: what it is, how strong, and when.
+struct EffectSection: View {
+    @EnvironmentObject var model: EditorModel
+    let item: EffectItem
+
+    var body: some View {
+        GlassCard(title: "Effect", trailing: AnyView(
+            Button { model.selection = item.id; model.deleteSelection() } label: {
+                Image(systemName: "trash").font(.system(size: 10, weight: .semibold)).foregroundStyle(Ink.secondary)
+            }
+            .buttonStyle(.plain).help("Remove this effect")
+        )) {
+            PillMenu(label: "Type", value: item.kind.label) {
+                ForEach(ClipEffect.Kind.allCases) { k in
+                    Button { model.updateEffect(item.id, undo: .push) { $0.kind = k } } label: { Label(k.label, systemImage: k.icon) }
+                }
+            }
+            if item.kind != .mirror {
+                PillSlider(label: "Amount", value: "\(Int((item.amount * 100).rounded()))%",
+                           amount: Binding(get: { item.amount }, set: { v in model.updateEffect(item.id) { $0.amount = v } }),
+                           range: 0...1, reset: 0.5)
+            }
+            HStack(spacing: 8) {
+                PillSlider(label: "Start", value: String(format: "%.1fs", item.start),
+                           amount: Binding(get: { item.start }, set: { v in model.updateEffect(item.id) { $0.start = v } }),
+                           range: 0...max(0.1, model.project.duration), reset: 0)
+                PillSlider(label: "Length", value: String(format: "%.1fs", item.duration),
+                           amount: Binding(get: { item.duration }, set: { v in model.updateEffect(item.id) { $0.duration = max(EffectItem.minLength, v) } }),
+                           range: EffectItem.minLength...max(1, model.project.duration), reset: 3)
+            }
+            Text("Applies to everything under it on the timeline. Drag the block's edges on the effects lane to change when.")
+                .font(.system(size: 11)).foregroundStyle(Ink.tertiary)
         }
     }
 }

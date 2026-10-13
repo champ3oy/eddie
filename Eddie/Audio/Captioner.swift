@@ -67,27 +67,52 @@ enum Captioner {
         return out
     }
 
+    /// All the words in an audio file. Long recordings come back in pieces (one per stretch of speech), so every
+    /// piece is collected until recognition says it has finished — not just the first or last one.
     static func recognize(_ url: URL, with recognizer: SFSpeechRecognizer) async throws -> [Word] {
         let request = SFSpeechURLRecognitionRequest(url: url)
         request.shouldReportPartialResults = false
         request.addsPunctuation = true
         if recognizer.supportsOnDeviceRecognition { request.requiresOnDeviceRecognition = true }
-        return try await withCheckedThrowingContinuation { c in
-            var done = false
-            recognizer.recognitionTask(with: request) { result, error in
-                guard !done else { return }
-                if let error {
-                    done = true
-                    // "No speech detected" is not a failure, just nothing to caption.
-                    if (error as NSError).code == 1110 { c.resume(returning: []) } else { c.resume(throwing: error) }
-                    return
-                }
-                guard let result, result.isFinal else { return }
-                done = true
-                c.resume(returning: result.bestTranscription.segments.map {
-                    Word(text: $0.substring, start: $0.timestamp, duration: $0.duration)
-                })
+        let collector = Collector()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (c: CheckedContinuation<[Word], Error>) in
+                collector.continuation = c
+                collector.task = recognizer.recognitionTask(with: request, delegate: collector)
             }
+        } onCancel: {
+            collector.task?.cancel()
+        }
+    }
+
+    /// Gathers each finished piece of a recognition task; answers once the whole file is done.
+    private final class Collector: NSObject, SFSpeechRecognitionTaskDelegate, @unchecked Sendable {
+        var continuation: CheckedContinuation<[Word], Error>?
+        var task: SFSpeechRecognitionTask?
+        private var words: [Double: Word] = [:]
+        private let lock = NSLock()
+
+        func speechRecognitionTask(_ task: SFSpeechRecognitionTask, didFinishRecognition result: SFSpeechRecognitionResult) {
+            lock.withLock {
+                // Keyed by start time: a later, fuller piece replaces any words it repeats.
+                for s in result.bestTranscription.segments {
+                    words[(s.timestamp * 100).rounded() / 100] = Word(text: s.substring, start: s.timestamp, duration: s.duration)
+                }
+            }
+        }
+
+        func speechRecognitionTask(_ task: SFSpeechRecognitionTask, didFinishSuccessfully successfully: Bool) {
+            let (found, c) = lock.withLock { () -> ([Word], CheckedContinuation<[Word], Error>?) in
+                let c = continuation
+                continuation = nil
+                return (words.values.sorted { $0.start < $1.start }, c)
+            }
+            guard let c else { return }
+            if successfully || !found.isEmpty { c.resume(returning: found); return }
+            let error = task.error as NSError?
+            // "No speech detected" isn't a failure — just nothing to caption.
+            if error == nil || error?.code == 1110 || error?.code == 203 { c.resume(returning: []) }
+            else { c.resume(throwing: error!) }
         }
     }
 

@@ -32,7 +32,7 @@ struct MediaBinView: View {
             }
             Row.segmented(Filter.allCases, selected: filter, title: { $0.rawValue }) { filter = $0 }
             ScrollView {
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 10) {
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)], spacing: 16) {
                     ForEach(items, id: \.self) { url in
                         BinTile(url: url, uses: model.uses(of: url))
                             .onTapGesture(count: 2) { model.place([url], atTime: model.project.duration, lane: .main) }

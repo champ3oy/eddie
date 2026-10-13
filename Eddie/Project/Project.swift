@@ -462,6 +462,8 @@ struct Project: Codable, Equatable {
     var hiddenLanes: Set<String> = []
     /// Lanes that can't be changed on the timeline (same keys, plus "clipsound" and "audio0"…).
     var lockedLanes: Set<String> = []
+    /// Effects on the effects lane (blur, grain, glitch…), each over a stretch of time.
+    var effects: [EffectItem] = []
     static func overlayLane(_ i: Int) -> String { "overlay\(i)" }
 
     static let clipSoundLane = "clips"
@@ -491,6 +493,7 @@ struct Project: Codable, Equatable {
         mutedLanes = try c.decodeIfPresent(Set<String>.self, forKey: .mutedLanes) ?? []
         hiddenLanes = try c.decodeIfPresent(Set<String>.self, forKey: .hiddenLanes) ?? []
         lockedLanes = try c.decodeIfPresent(Set<String>.self, forKey: .lockedLanes) ?? []
+        effects = try c.decodeIfPresent([EffectItem].self, forKey: .effects) ?? []
     }
 
     // MARK: Media
@@ -652,6 +655,7 @@ struct Project: Codable, Equatable {
         clips.removeAll { $0.id == id }
         music.removeAll { $0.id == id }
         titles.removeAll { $0.id == id }
+        effects.removeAll { $0.id == id }
         overlays.removeAll { $0.id == id }
         markers.removeAll { $0.id == id }
     }
@@ -733,6 +737,11 @@ struct Project: Codable, Equatable {
         change(&overlays[i])
     }
 
+    mutating func updateEffect(_ id: UUID, _ change: (inout EffectItem) -> Void) {
+        guard let i = effects.firstIndex(where: { $0.id == id }) else { return }
+        change(&effects[i])
+    }
+
     mutating func updateTitle(_ id: UUID, _ change: (inout TitleItem) -> Void) {
         guard let i = titles.firstIndex(where: { $0.id == id }) else { return }
         change(&titles[i])
@@ -775,6 +784,7 @@ struct Project: Codable, Equatable {
                 return t
             }
             for i in overlays.indices { overlays[i].start = shift(overlays[i].start) }
+            effects = effects.filter { !($0.start >= a && $0.end <= b) }.map { var e = $0; e.start = shift(e.start); return e }
             for i in music.indices { music[i].start = shift(music[i].start) }
             markers = markers.filter { !($0.time > a && $0.time < b) }.map { var m = $0; m.time = shift(m.time); return m }
         }
@@ -786,6 +796,7 @@ struct Project: Codable, Equatable {
         for (i, c) in clips.enumerated() { out.append(starts[i] + c.duration) }
         for o in overlays where o.id != id { out += [o.start, o.end] }
         for t in titles where t.id != id { out += [t.start, t.end] }
+        for e in effects where e.id != id { out += [e.start, e.end] }
         for m in music where m.id != id { out += [m.start, m.end] }
         for m in markers where m.id != id { out.append(m.time) }
         return out + beatTimes(excluding: id)

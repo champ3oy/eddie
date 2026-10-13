@@ -20,6 +20,24 @@ final class AgentNewActionsTests: XCTestCase {
         EditExecutor.apply(actions, to: p, labels: TimelineLabels(p), playhead: 1, sourceDuration: { _ in 8 })
     }
 
+    func testTimedEffects() {
+        var glitch = EditAction(type: "effect"); glitch.kind = "glitch"; glitch.at = 2; glitch.duration = 1.5
+        var r = run([glitch], on: project())
+        XCTAssertEqual(r.errors, [])
+        XCTAssertEqual(r.project.effects.map(\.start), [2]); XCTAssertEqual(r.project.effects.map(\.duration), [1.5])
+        XCTAssertTrue(TimelineDescriber.describe(r.project, playhead: 0).contains("e1: glitch"))
+        var move = EditAction(type: "effect"); move.target = "e1"; move.at = 5; move.amount = 0.3
+        r = run([move], on: r.project)
+        XCTAssertEqual(r.project.effects.first?.start, 5); XCTAssertEqual(r.project.effects.first?.amount, 0.3)
+        XCTAssertEqual(r.project.effects.first?.kind, .glitch)
+        var del = EditAction(type: "delete"); del.target = "e1"
+        XCTAssertEqual(run([del], on: r.project).project.effects, [])
+        // Overlays still take their own effects.
+        var o = EditAction(type: "effect"); o.target = "o1"; o.kind = "blur"
+        let ro = run([o], on: project())
+        XCTAssertEqual(ro.project.overlays[0].clip.effects.map(\.kind), [.blur]); XCTAssertEqual(ro.project.effects, [])
+    }
+
     func testCaptionActions() {
         var a = EditAction(type: "caption_style"); a.preset = "Highlight"
         var b = EditAction(type: "add_caption"); b.text = "Second line"; b.at = 3; b.duration = 1
@@ -48,7 +66,9 @@ final class AgentNewActionsTests: XCTestCase {
         let r = run([effect, mask, key, blend, cut, lane, title, fmt], on: project())
         XCTAssertEqual(r.errors, [])
         let p = r.project
-        XCTAssertEqual(p.clips[0].effects.first?.kind, .vhs)
+        XCTAssertEqual(p.effects.first?.kind, .vhs, "effects go on the effects lane")
+        XCTAssertEqual(p.effects.first?.start, 0); XCTAssertEqual(p.effects.first?.duration, 4, "spanning c1")
+        XCTAssertEqual(p.effects.first?.amount, 0.8)
         XCTAssertEqual(p.overlays[0].clip.mask?.width, 0.5)
         XCTAssertEqual(p.overlays[0].clip.chromaKey?.tolerance, 0.5)
         XCTAssertEqual(p.overlays[0].blend, .screen)
@@ -57,7 +77,7 @@ final class AgentNewActionsTests: XCTestCase {
         let t = p.titles.first { $0.text == "Big" }!
         XCTAssertEqual(t.outline, 0.1); XCTAssertEqual(t.glow, 0.6); XCTAssertEqual(t.animation, .pop)
         var off = EditAction(type: "effect"); off.clip = "c1"; off.kind = "none"
-        XCTAssertEqual(run([off], on: p).project.clips[0].effects, [])
+        XCTAssertEqual(run([off], on: p).project.effects, [])
     }
 
     func testSoundAndMotionActions() {

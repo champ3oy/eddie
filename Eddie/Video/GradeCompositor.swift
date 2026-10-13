@@ -23,6 +23,8 @@ final class GradeState: @unchecked Sendable {
         var hiddenLanes: Set<String> = []
         /// Blurred copy of the clip behind clips that fit inside the frame.
         var blurBackground = false
+        /// Effects-lane effects (applied to the whole picture under them).
+        var effects: [EffectItem] = []
         /// Clips of another shape fill the frame (true) or fit inside it (false).
         var fill = false
         /// Fade to black at the very end (seconds) and where the end is.
@@ -154,6 +156,23 @@ final class GradeCompositor: NSObject, AVVideoCompositing {
                 .composited(over: after)
         } else {
             image = Self.compose(instruction, request: request, snap: snap, mode: snap.mode, size: size, now: now)
+        }
+        // Effects on the effects lane act on everything under them (not on titles above).
+        if !snap.hiddenLanes.contains("effects") {
+            let active = snap.effects.filter { now >= $0.start && now < $0.end }
+            if !active.isEmpty {
+                let list = active.map { ClipEffect(kind: $0.kind, amount: $0.amount) }
+                image = VisualEffects.apply(list, to: image.cropped(to: frame), time: now)
+                let shake = VisualEffects.shakeOffset(list, time: now, size: size)
+                if shake != .zero {
+                    // Shake moves the picture; zoom in a touch so the edges stay covered.
+                    let z = 1 + 2.2 * max(abs(shake.x) / size.width, abs(shake.y) / size.height)
+                    image = image.transformed(by: CGAffineTransform(translationX: -size.width / 2, y: -size.height / 2)
+                        .concatenating(CGAffineTransform(scaleX: z, y: z))
+                        .concatenating(CGAffineTransform(translationX: size.width / 2 + shake.x, y: size.height / 2 + shake.y)))
+                        .cropped(to: frame)
+                }
+            }
         }
         for title in snap.titles where now >= title.start && now < title.end
             && !snap.hiddenLanes.contains(title.isCaption ? "captions" : "titles") {
