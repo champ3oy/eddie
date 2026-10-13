@@ -64,7 +64,9 @@ open build/Build/Products/Release/Eddie.app
 ```
 
 To make a signed, notarized DMG like the one in Releases: `scripts/release.sh` (see the comments at the top
-of the script for the one-time notarization setup).
+of the script for the one-time notarization setup). It builds in the GIPHY and Freesound keys from
+`.secrets/giphy-key` and `.secrets/freesound-key` (or `EDDIE_GIPHY_KEY` / `EDDIE_FREESOUND_KEY`); `.secrets/`
+is git-ignored, so keys never end up in the repo.
 
 ---
 
@@ -85,6 +87,16 @@ that conforms to `VisionModel` (`Eddie/AI/VisionModel.swift`) and adding a case 
 
 Editing works without a key; only Auto Grade, "Ask Eddie" and AI color need one.
 
+### Online libraries (optional)
+
+| Library | Used for | Key |
+|---|---|---|
+| [GIPHY](https://developers.giphy.com/dashboard/) | Stickers and GIFs in the sticker picker | Settings → GIPHY · `GIPHY_API_KEY` |
+| [Freesound](https://freesound.org/apiv2/apply) | The sound effects library (⌥⌘L) | Settings → Freesound · `FREESOUND_API_KEY` |
+
+The DMG from Releases comes with keys for both built in, so they work out of the box. Builds from source
+don't include any keys — add your own in Settings (a key you add always takes priority).
+
 ---
 
 ## What it can do
@@ -97,7 +109,7 @@ Editing works without a key; only Auto Grade, "Ask Eddie" and AI color need one.
   slow zoom, overlays, markers, reverse, freeze frame, sound clean-up, captions, beat finding, presets and
   color — looks at the result, and fixes anything until it's done. One request is one undo.
 - **Strength** scales the whole grade; **presets** (Warm, Cool, Bright, Punchy, Soft, Vivid, Moody,
-  Cinematic, Golden, Faded, Mono) preview on the frame under the playhead.
+  Cinematic, Golden, Faded, Mono) preview on a frame from the selected clip.
 
 ### Color
 - Log footage is converted to normal-looking Rec.709 with a LUT first. DJI's **D-Log M** conversion is
@@ -125,10 +137,13 @@ Editing works without a key; only Auto Grade, "Ask Eddie" and AI color need one.
   highlighting.
 - **Text looks:** outline, glow, and animations (pop, slide, bounce, typewriter) for titles and captions.
 - **Tighten the edit:** cut out filler words ("um", "uh") and long pauses automatically.
-- **Effects:** blur, sharpen, vignette, film grain, glitch, camera shake, VHS, light leaks, pixelate, mirror.
+- **Effects** on their own **effects lane**: blur, sharpen, vignette, film grain, glitch, camera shake, VHS,
+  light leaks, pixelate, mirror. Drag an effect to move it and its edges to choose exactly when it applies.
 - **Masks** (circle, rectangle, linear, feathered), **green screen**, **blend modes**, and **people cut-out**
   (background removal).
-- **Stickers and emoji**, **multiple overlay lanes**, and **lock or hide** any lane.
+- **Stickers:** the whole emoji library (search by name — "fire", "red heart", "flag ghana", skin tones),
+  plus **GIPHY stickers and GIFs**. Animated GIFs, WebP and PNGs play and loop on the video and in exports.
+- **Multiple overlay lanes**, and **lock or hide** any lane.
 - **Smart tools:** speed ramps (hero, bullet time, montage…), **stabilization**, **auto reframe** that follows
   the subject when going vertical, and **motion tracking** so a sticker or overlay follows an object.
 - **Blurred background** behind clips that don't fill the frame.
@@ -136,16 +151,21 @@ Editing works without a key; only Auto Grade, "Ask Eddie" and AI color need one.
 - **Snapping** to the playhead, edges, markers and the music's beats.
 - Multi-select, copy / cut / paste, **insert or overwrite** edits, markers, J/K/L shuttle, and a
   timeline that zooms (pinch, ⌘= / ⌘−) and keeps its scale while you edit.
+- The timeline **resizes** (drag the line above it; double-click for automatic) and its lanes scroll when
+  there are many; caption and effect lanes only appear once you use them.
 - Full **undo / redo**.
 
 ### Audio
 - Music, sound effects and **voiceovers recorded in the app**, on as many lanes as you need.
+- A **sound effects library** (⌥⌘L, or the ♪ button): search Freesound's free sounds, listen, and add at the
+  playhead. Only sounds free for any video are shown (CC0 and CC BY); Eddie keeps the credits and
+  **Copy Credits** gives you a block for your video's description.
 - Per-clip and per-lane volume and mute, fades, automatic ducking of clip sound under music, and music
   dipping under voiceover.
 - **Normalize loudness** and **reduce background noise** (Apple's voice isolation), rendered to new files —
   your originals are never touched.
 - **Find the beat** of a song so cuts can land on it.
-- **Volume lines:** double-click an audio block to add points and shape its volume over time.
+- **Volume lines:** ⌥-click an audio block to add points and shape its volume over time.
 - **Voice effects** (robot, deep, chipmunk, echo, old radio, alien, cathedral) and **text to speech** with the
   Mac's voices.
 - **Extract audio** from a clip onto its own lane.
@@ -154,7 +174,9 @@ Editing works without a key; only Auto Grade, "Ask Eddie" and AI color need one.
 - A **Projects** screen; every project saves itself as you work. Projects only point to your media —
   nothing is copied or changed.
 - A **media bin** per project (drag files in from Finder). If files move, Eddie helps you find them again.
-- **1080p playback proxies** for 4K footage, and disk caches for thumbnails and waveforms.
+- **1080p playback proxies** for 4K footage, a **Preview Quality** setting (Full / Half / Quarter, in the
+  Playback menu) for big edits, and disk caches for thumbnails and waveforms. Work happening in the
+  background (captions, audio, proxies, downloads) shows in a small pill over the video.
 - **Export** with presets (best quality, social 1080p, YouTube 4K, small file, ProRes master) or pick
   HEVC 10-bit / H.264 MP4 / ProRes 422 / audio only / animated GIF, size and frame rate. Progress shows over the
   video, with Cancel.
@@ -185,11 +207,11 @@ frames and export. Everything happens live in Eddie's window, and every change i
 
 | Tool | What it does |
 |---|---|
-| `get_timeline` | The edit as text — clips c1…, overlays o1…, titles t1…, audio m1…, markers k1… |
+| `get_timeline` | The edit as text — clips c1…, overlays o1…, titles t1…, audio m1…, effects e1…, markers k1… |
 | `get_frame` | An image of the finished, graded frame at any time |
 | `list_projects` · `open_project` · `new_project` | Pick what to work on |
 | `add_media` | Add videos, photos or audio as clips, overlays, music, effects, voiceovers or to the bin |
-| `edit` | Every editing action: split, trim, move, speed, transitions, fades, titles, overlays, framing, Ken Burns, format, markers, reverse, freeze, audio clean-up, captions, beats… |
+| `edit` | Every editing action: split, trim, move, speed, transitions, fades, titles, overlays, framing, Ken Burns, format, markers, reverse, freeze, audio clean-up, captions, timed effects, masks, green screen, stickers, voice effects, speed ramps, stabilize, reframe, tracking, beats… |
 | `set_grade` · `auto_grade` | Set the grade's knobs directly, or let Eddie's AI colorist grade |
 | `control` | Play, pause, seek, undo, redo, save |
 | `export` | Render with a codec, size and frame rate |
@@ -214,6 +236,7 @@ account can open. If Eddie isn't running, it opens it. Nothing is reachable from
 | ⌘I | Add clips or photos | | ⇧⌘I | Add overlay |
 | ⌥⌘M | Add music | | ⇧⌘R | Record voiceover |
 | ⌘E | Export | | ⌘0 | Projects |
+| ⌥⌘L | Sound effects library | | ⇧⌘B | Compare before / after |
 | ⌘Z / ⇧⌘Z | Undo / redo | | ⌘N | New project |
 
 ---
@@ -225,7 +248,13 @@ two video tracks so transitions can overlap; overlays and audio lanes get their 
 `AVAudioMix` for volume curves, fades and ducking. Every frame is drawn by a custom
 `AVVideoCompositing` compositor (`GradeCompositor`) that decodes 10-bit sources, applies the LUT and the
 grade with a Metal Core Image kernel compiled at runtime, then lays out framing, overlays, transitions
-and titles. The same path renders the viewer and the exported file.
+and titles. Effects on the effects lane apply to the whole picture for their stretch of time, and animated
+overlays (GIF, WebP, APNG) pick the right frame for each moment. The same path renders the viewer and the
+exported file.
+
+**Staying smooth** — while the video plays, only the playhead and the timecode redraw (everything else that
+follows the playhead updates a few times a second); drags are shown once per screen refresh; saving
+happens in the background.
 
 **Auto Grade** — six frames are sampled from the clip, converted, and measured (brightness percentiles,
 clipping, white-balance cast). The frames and numbers go to the vision model, which answers with knob
@@ -246,8 +275,8 @@ the new timeline, and lets the model continue until it says it's done (up to fou
 - When you use an AI feature, Eddie sends a few downscaled frames and a text description of the edit to
   the provider you picked — nothing else, and only when you ask.
 - Captions use on-device speech recognition. API keys are stored in the macOS Keychain.
-- GIPHY and Freesound (optional): only your search words go to them; GIFs and sounds you add are saved
-  in the media folder, so projects keep working offline.
+- GIPHY and Freesound: only your search words go to them, and only when you search. GIFs and sounds you
+  add are downloaded into `~/Library/Application Support/Eddie/Media/`, so projects keep working offline.
 
 ---
 
@@ -258,15 +287,17 @@ Eddie/
   App/        EddieApp (menus, shortcuts), EditorModel (all editor state, undo, playback)
   AI/         VisionModel + providers, GradingAgent, EditingAgent (AI editing tools), settings/Keychain
   Grade/      GradeRecipe (the ten knobs), CubeLUT, GradeRenderer, Metal kernel source, TitleRenderer
-  Video/      GradeCompositor, Exporter + ExportSettings, Reverser, MediaCache (proxies, thumbnails)
-  Audio/      AudioProcessor (normalize, noise reduction), BeatDetector, VoiceRecorder, Captioner
+  Video/      GradeCompositor, VisualEffects, VisionTools, AnimatedImage, Exporter, Reverser, MediaCache
+  Audio/      AudioProcessor (normalize, noise reduction, voice effects), BeatDetector, VoiceRecorder, Captioner
+  Captions/   Caption styles, SRT, filler-word and pause finding
+  Media/      GIPHY and Freesound clients, built-in keys
   Agent/      MCP for outside agents: tool definitions, the socket server, the tool handlers
   Project/    Project model, ProjectCompiler (→ AVComposition), ProjectLibrary (saving)
   Analysis/   FrameStats (histograms, clipping, white balance)
   UI/         SwiftUI views: viewer, timeline, inspector, media bin, projects, export, settings
-  Resources/  App icon, DJI D-Log M LUT
+  Resources/  App icon, DJI D-Log M LUT, emoji library (emoji.json)
 EddieMCP/     eddie-mcp, the stdio MCP server agents launch (relays to the app)
-EddieTests/   ~100 XCTest cases with small video/audio fixtures
+EddieTests/   ~160 XCTest cases with small video/audio fixtures
 docs/         Design notes
 project.yml   XcodeGen project definition
 ```
@@ -284,6 +315,7 @@ export, the AI action executor and more. A few opt-in tests need extra setup:
 
 - **Live AI grading** on a real clip — `TEST_RUNNER_EDDIE_LIVE_CLIP=/path/to/clip.mp4` and a provider key.
 - **Window snapshots** — `TEST_RUNNER_EDDIE_SNAPSHOT_OUT=/some/folder` renders the UI to PNGs.
+- **Live Freesound** search, download and add — `TEST_RUNNER_FREESOUND_API_KEY=<key>`.
 
 The demo above is recorded by the app itself: launch it with `EDDIE_DEMO_OUT`, `EDDIE_DEMO_CLIP`,
 `EDDIE_DEMO_OVERLAY` and `EDDIE_DEMO_MUSIC` set (see `Eddie/Demo/DemoDirector.swift`) and it plays a
@@ -299,7 +331,7 @@ scripted edit and records its own window. It needs Screen Recording permission.
 - The emoji list and search keywords (`Eddie/Resources/emoji.json`) come from Unicode's emoji-test.txt
   and the CLDR annotations — © Unicode, Inc., used under the
   [Unicode License v3](https://www.unicode.org/license.txt).
-- Stickers and GIFs search is **Powered by GIPHY** (bring your own API key, Settings → GIPHY).
+- Stickers and GIFs search is **Powered by GIPHY**.
 - The sound effects library searches [Freesound.org](https://freesound.org) (Settings → Freesound). Only
   CC0 and CC BY sounds are offered; Eddie keeps each CC BY sound's credit (Copy Credits in the library).
 - Built with SwiftUI, AVFoundation, Core Image, Speech and Accelerate.
