@@ -33,6 +33,8 @@ targets:
             LSItemContentTypes: [public.movie]
         NSMicrophoneUsageDescription: Eddie records voiceovers from your microphone. Recordings stay on this Mac.
         NSSpeechRecognitionUsageDescription: Eddie turns speech in your clips into captions, on this Mac.
+        # Filled in only by scripts/release.sh (never committed); empty in source builds.
+        EddieGiphyKey: "$(EDDIE_GIPHY_KEY)"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.deadalus.eddie
@@ -41,6 +43,7 @@ targets:
         PRODUCT_NAME: Eddie
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_FILE: Eddie/Info.plist
+        EDDIE_GIPHY_KEY: ""
         INFOPLIST_KEY_CFBundleDisplayName: Eddie
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.video
         INFOPLIST_KEY_NSHumanReadableCopyright: ""

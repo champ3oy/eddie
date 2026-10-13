@@ -14,6 +14,7 @@ DerivedData/
 # Secrets, just in case
 .env
 *.env
+.secrets/
 
 # Demo recording scratch files
 docs/media/demo-raw.*

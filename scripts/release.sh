@@ -6,6 +6,11 @@
 #
 # One-time setup for notarization (an app-specific password from appleid.apple.com):
 #   xcrun notarytool store-credentials eddie --apple-id <you@example.com> --team-id F77F7X4Q2W
+#
+# Built-in GIPHY key (DMG only — never in the repo). The first of these that's set is used:
+#   EDDIE_GIPHY_KEY=… scripts/release.sh
+#   .secrets/giphy-key            (a file with just the key; .secrets/ is git-ignored)
+# Without one the DMG still works; people add their own key in Settings.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -20,12 +25,24 @@ step() { printf "\n▸ %s\n" "$1"; }
 step "Generating the Xcode project"
 xcodegen generate --quiet
 
+GIPHY_KEY="${EDDIE_GIPHY_KEY:-}"
+if [[ -z "$GIPHY_KEY" && -f .secrets/giphy-key ]]; then GIPHY_KEY="$(tr -d '[:space:]' < .secrets/giphy-key)"; fi
+# Stored lightly scrambled (XOR, hex) so it isn't sitting in the app as plain text. Eddie unscrambles it.
+GIPHY_BUILTIN=""
+if [[ -n "$GIPHY_KEY" ]]; then
+  GIPHY_BUILTIN="$(GIPHY_KEY="$GIPHY_KEY" python3 -c 'import os; k=os.environ["GIPHY_KEY"].encode(); m=b"eddie-giphy"; print(bytes(c ^ m[i % len(m)] for i, c in enumerate(k)).hex())')"
+  step "Including the built-in GIPHY key"
+else
+  step "No GIPHY key found (EDDIE_GIPHY_KEY or .secrets/giphy-key) — the DMG will ask users for their own"
+fi
+
 step "Building Release (signed with $IDENTITY)"
 rm -rf build/dist
 xcodebuild -project Eddie.xcodeproj -scheme Eddie -configuration Release \
   -derivedDataPath build/dist-derived \
   CODE_SIGN_IDENTITY="$IDENTITY" CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM="$TEAM" \
   OTHER_CODE_SIGN_FLAGS="--timestamp" CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
+  EDDIE_GIPHY_KEY="$GIPHY_BUILTIN" \
   build -quiet
 
 mkdir -p build/dist dist

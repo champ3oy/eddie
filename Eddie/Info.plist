@@ -33,6 +33,8 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>EddieGiphyKey</key>
+	<string>$(EDDIE_GIPHY_KEY)</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Eddie records voiceovers from your microphone. Recordings stay on this Mac.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

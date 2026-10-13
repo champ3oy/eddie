@@ -107,3 +107,16 @@ final class StickerTests: XCTestCase {
         return FrameStats(rgba: px.pixels, width: px.width, height: px.height).meanRGB
     }
 }
+
+final class GiphyKeyTests: XCTestCase {
+    func testBuiltInKeyUnscrambles() {
+        // Same scrambling as scripts/release.sh: XOR with "eddie-giphy", then hex.
+        let key = "abc123XYZ"
+        let mask = Array("eddie-giphy".utf8)
+        let hex = key.utf8.enumerated().map { String(format: "%02x", $0.element ^ mask[$0.offset % mask.count]) }.joined()
+        XCTAssertEqual(Giphy.unscramble(hex), key)
+        XCTAssertEqual(Giphy.unscramble("$(EDDIE_GIPHY_KEY)"), "", "an unfilled placeholder means no key")
+        XCTAssertEqual(Giphy.unscramble(""), "")
+        XCTAssertFalse(Giphy.hasBuiltInKey, "source builds carry no key")
+    }
+}

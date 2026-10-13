@@ -47,7 +47,9 @@ struct SettingsView: View {
                     Text("Or set GIPHY_API_KEY").foregroundStyle(.secondary)
                 }
                 .font(.caption)
-                Text("Adds GIPHY stickers and GIFs to the sticker picker. Only your searches go to GIPHY; the GIFs you add are saved on this Mac.")
+                Text(Giphy.hasBuiltInKey
+                     ? "GIPHY stickers and GIFs work out of the box with Eddie's key; add your own to use it instead. Only your searches go to GIPHY; the GIFs you add are saved on this Mac."
+                     : "Adds GIPHY stickers and GIFs to the sticker picker. Only your searches go to GIPHY; the GIFs you add are saved on this Mac.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
