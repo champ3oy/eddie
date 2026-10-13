@@ -260,22 +260,29 @@ struct TimelineView: View {
             .disabled(!model.hasProject)
     }
 
+    /// One click opens the choice: sound effects from Freesound or from this Mac, music, or text to speech.
     private var musicTool: some View {
         Menu {
-            Button("Add Music…") { Panels.addMusic(model) }
-            Button("Sound Effects Library…") { model.showingSoundLibrary = true }
-            Button("Add Sound Effects from a File…") { Panels.addMusic(model, kind: .effect) }
-            Button("Text to Speech…") { showSpeech = true }
+            Section("Sound effects") {
+                Button { model.showingSoundLibrary = true } label: {
+                    Label("Search Freesound…", systemImage: "magnifyingglass")
+                }
+                Button { Panels.addMusic(model, kind: .effect) } label: {
+                    Label("From This Mac…", systemImage: "folder")
+                }
+            }
+            Section("Music and voice") {
+                Button { Panels.addMusic(model) } label: { Label("Music from This Mac…", systemImage: "music.note") }
+                Button { showSpeech = true } label: { Label("Text to Speech…", systemImage: "text.bubble") }
+            }
         } label: {
             Image(systemName: "music.note").font(.system(size: 13))
-        } primaryAction: {
-            Panels.addMusic(model)
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize()
         .frame(width: 26, height: 22)
-        .help("Add music (⌥⌘M) — hold for the sound effects library and text to speech")
+        .help("Add sound — sound effects from Freesound or this Mac, music, or text to speech")
         .demoAnchor("tool-music")
         .disabled(!model.hasProject)
     }
