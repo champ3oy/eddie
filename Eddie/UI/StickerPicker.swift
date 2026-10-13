@@ -15,11 +15,7 @@ struct StickerPicker: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Picker("", selection: $tab) {
-                ForEach(Tab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+            tabs
 
             searchField
 
@@ -32,6 +28,26 @@ struct StickerPicker: View {
         .frame(width: Self.width)
         .padding(10)
         .onAppear { focused = true }
+    }
+
+    /// Eddie-style tabs: the chosen one is a white pill, the others plain text (no system blue).
+    private var tabs: some View {
+        HStack(spacing: 2) {
+            ForEach(Tab.allCases, id: \.self) { t in
+                Button { tab = t } label: {
+                    Text(t.rawValue)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(tab == t ? Color.black : Ink.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 24)
+                        .background(Capsule().fill(tab == t ? Color.white : Color.clear))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(2)
+        .background(Capsule().fill(Color.white.opacity(0.08)))
+        .animation(.easeOut(duration: 0.15), value: tab)
     }
 
     private var searchField: some View {
