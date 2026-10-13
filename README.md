@@ -25,7 +25,8 @@ your Mac; the only thing that ever leaves it is what you send to the AI provider
 
 ## Contents
 
-- [Getting started](#getting-started)
+- [Install](#install)
+- [Build from source](#getting-started)
 - [Set up the AI](#set-up-the-ai)
 - [What it can do](#what-it-can-do)
 - [Use it from your AI agent (MCP)](#use-it-from-your-ai-agent-mcp)
@@ -35,6 +36,13 @@ your Mac; the only thing that ever leaves it is what you send to the AI provider
 - [Project layout](#project-layout)
 - [Tests](#tests)
 - [Credits](#credits)
+
+---
+
+## Install
+
+Download **Eddie-x.y.z.dmg** from [Releases](../../releases), open it and drag **Eddie** to **Applications**.
+It's signed and notarized by Apple, so it opens normally. Requires macOS 15 or later.
 
 ---
 
@@ -55,8 +63,8 @@ xcodebuild -project Eddie.xcodeproj -scheme Eddie -configuration Release -derive
 open build/Build/Products/Release/Eddie.app
 ```
 
-The app isn't signed with a developer certificate, so the first time you open a copy from somewhere
-else, right-click it and choose **Open**.
+To make a signed, notarized DMG like the one in Releases: `scripts/release.sh` (see the comments at the top
+of the script for the one-time notarization setup).
 
 ---
 
