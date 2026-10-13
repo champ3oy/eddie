@@ -87,3 +87,17 @@ final class PerformanceTests: XCTestCase {
         sub.cancel()
     }
 }
+
+final class EmojiSearchTests: XCTestCase {
+    func testSearchByName() {
+        XCTAssertEqual(EmojiCatalog.search("").count, EditorModel.stickerEmoji.count, "empty search shows the favorites")
+        XCTAssertTrue(EmojiCatalog.search("fire").contains("🔥"))
+        XCTAssertTrue(EmojiCatalog.search("dog").contains("🐶"))
+        XCTAssertTrue(EmojiCatalog.search("love").contains("😍"))
+        XCTAssertTrue(EmojiCatalog.search("tears joy").contains("😂"))
+        XCTAssertTrue(EmojiCatalog.search("pizza").contains("🍕"))
+        XCTAssertEqual(EmojiCatalog.search("🦄"), ["🦄"], "pasting an emoji uses it")
+        XCTAssertEqual(EmojiCatalog.search("zzzqqq"), [])
+        XCTAssertGreaterThan(EmojiCatalog.all.count, 1000, "the whole emoji set, not just the favorites")
+    }
+}

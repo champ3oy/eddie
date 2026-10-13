@@ -74,6 +74,7 @@
 		B84879E64618ADB5CC703C12 /* ChatPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFB6B4AB7BF093F2F96B9108 /* ChatPanel.swift */; };
 		B900E1897480746EBC474AE2 /* CaptionTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4205A9DEE6148EE299CECD70 /* CaptionTools.swift */; };
 		C03B3BB2630FBBFA52E9B246 /* normal_blue.mov in Resources */ = {isa = PBXBuildFile; fileRef = CE3329C7143936F956B29ED9 /* normal_blue.mov */; };
+		C50CA649AD228B2F99905772 /* EmojiCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1EE84C8B29F6642A339A9BB /* EmojiCatalog.swift */; };
 		C8B4055E21674091254D7863 /* music_test.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 12E8D407B17B9FA2C14B2089 /* music_test.m4a */; };
 		CDEB77C4AED3CE6921855772 /* log_test_10bit.mov in Resources */ = {isa = PBXBuildFile; fileRef = 63805808A9E8C45A22D887AA /* log_test_10bit.mov */; };
 		CF135F6C86AFC54C05D0790F /* VoiceRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3071B2327D62E6C5064D9139 /* VoiceRecorder.swift */; };
@@ -202,6 +203,7 @@
 		CE3329C7143936F956B29ED9 /* normal_blue.mov */ = {isa = PBXFileReference; lastKnownFileType = video.quicktime; path = normal_blue.mov; sourceTree = "<group>"; };
 		CE4D6E48E08159A60016B54F /* PerformanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceTests.swift; sourceTree = "<group>"; };
 		D0059CFE76CF26C708961F8D /* shake.mov */ = {isa = PBXFileReference; lastKnownFileType = video.quicktime; path = shake.mov; sourceTree = "<group>"; };
+		D1EE84C8B29F6642A339A9BB /* EmojiCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmojiCatalog.swift; sourceTree = "<group>"; };
 		D4FFE23B23D45C471E676C41 /* VisualEffects.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisualEffects.swift; sourceTree = "<group>"; };
 		D81F1EF1379D3D57E6A76B1F /* GradingAgent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GradingAgent.swift; sourceTree = "<group>"; };
 		D938C45C1E8616E968073F97 /* InspectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorView.swift; sourceTree = "<group>"; };
@@ -254,6 +256,7 @@
 		4385CB07E61954BB7F38B7C5 /* Project */ = {
 			isa = PBXGroup;
 			children = (
+				D1EE84C8B29F6642A339A9BB /* EmojiCatalog.swift */,
 				71E72013365BE403F5E594BB /* Project.swift */,
 				8FF50ABA40C8FEECE509A463 /* ProjectCompiler.swift */,
 				C9BC72D8CFE4FE901D057CF1 /* ProjectLibrary.swift */,
@@ -643,6 +646,7 @@
 				83DB456CD21961253AC5CD19 /* EditActionSchema.swift in Sources */,
 				E7985ACDD475A29B592AACD0 /* EditingAgent.swift in Sources */,
 				3A574778A2E227D255D7A56F /* EditorModel.swift in Sources */,
+				C50CA649AD228B2F99905772 /* EmojiCatalog.swift in Sources */,
 				2FA4A2D1E84D023681608C12 /* ExportSettings.swift in Sources */,
 				660F59BEBB4D3D07219322A0 /* ExportSheet.swift in Sources */,
 				F821E9C04856EA82C2BA9686 /* Exporter.swift in Sources */,
