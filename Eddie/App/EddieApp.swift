@@ -180,6 +180,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         DemoDirector.startIfRequested()
+        // Load the emoji library in the background so the sticker picker opens instantly.
+        Task.detached(priority: .utility) { _ = EmojiCatalog.byGroup }
         if NSClassFromString("XCTestCase") == nil {
             MainActor.assumeIsolated { EditorModel.shared.updateAgentServer() }
         }

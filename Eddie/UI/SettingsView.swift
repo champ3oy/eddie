@@ -7,6 +7,7 @@ struct SettingsView: View {
     @State private var models: [ProviderKind: String] = [:]
     @State private var cacheSize: Int64 = 0
     @State private var copied = false
+    @State private var giphyKey = ""
 
     private func copy(_ text: String) {
         NSPasteboard.general.clearContents()
@@ -32,6 +33,23 @@ struct SettingsView: View {
                     Text("Or set \(provider.environmentKey)").foregroundStyle(.secondary)
                 }
                 .font(.caption)
+            }
+
+            Section("GIPHY") {
+                SecureField("GIPHY API key", text: Binding(get: { giphyKey }, set: { v in
+                    giphyKey = v
+                    let trimmed = v.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if trimmed.isEmpty { Keychain.delete(account: Giphy.keyAccount) } else { Keychain.write(trimmed, account: Giphy.keyAccount) }
+                }))
+                HStack {
+                    Link("Get a free GIPHY API key", destination: URL(string: "https://developers.giphy.com/dashboard/")!)
+                    Spacer()
+                    Text("Or set GIPHY_API_KEY").foregroundStyle(.secondary)
+                }
+                .font(.caption)
+                Text("Adds GIPHY stickers and GIFs to the sticker picker. Only your searches go to GIPHY; the GIFs you add are saved on this Mac.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Color conversion") {
@@ -92,6 +110,7 @@ struct SettingsView: View {
         .frame(width: 520)
         .onAppear {
             cacheSize = MediaCache.size()
+            giphyKey = Keychain.read(account: Giphy.keyAccount) ?? ""
             for kind in ProviderKind.allCases {
                 keys[kind] = Keychain.read(account: kind.rawValue) ?? ""
                 let m = AISettings.model(for: kind)

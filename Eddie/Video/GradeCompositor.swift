@@ -201,8 +201,14 @@ final class GradeCompositor: NSObject, AVVideoCompositing {
         for layer in instruction.layers {
             var source: CIImage
             if let url = layer.photoURL {
-                guard let still = StillCache.image(url) else { continue }
-                source = still
+                if let anim = AnimatedImage.load(url) {
+                    // GIFs and animated stickers loop from where the clip starts on the timeline.
+                    let clipStart = layer.clipID.flatMap { snap.clips[$0]?.sourceStart } ?? 0
+                    source = anim.frame(at: now - layer.start + clipStart)
+                } else {
+                    guard let still = StillCache.image(url) else { continue }
+                    source = still
+                }
             } else if let track = layer.trackID, let buffer = request.sourceFrame(byTrackID: track) {
                 source = GradeRenderer.sourceImage(from: buffer).oriented(layer.orientation)
                 source = source.transformed(by: CGAffineTransform(translationX: -source.extent.minX, y: -source.extent.minY))

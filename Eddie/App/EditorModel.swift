@@ -562,7 +562,13 @@ final class EditorModel: ObservableObject {
               let w = props[kCGImagePropertyPixelWidth] as? CGFloat, let h = props[kCGImagePropertyPixelHeight] as? CGFloat
         else { throw CocoaError(.fileReadCorruptFile, userInfo: [NSLocalizedDescriptionKey: "Couldn't read this image."]) }
         let rotated = ((props[kCGImagePropertyOrientation] as? Int) ?? 1) >= 5
-        photoSizes[url] = rotated ? CGSize(width: h, height: w) : CGSize(width: w, height: h)
+        var size = rotated ? CGSize(width: h, height: w) : CGSize(width: w, height: h)
+        // Animated pictures play at most 720 px on the long side (see `AnimatedImage`).
+        if CGImageSourceGetCount(src) > 1, max(size.width, size.height) > 720 {
+            let s = 720 / max(size.width, size.height)
+            size = CGSize(width: (size.width * s).rounded(), height: (size.height * s).rounded())
+        }
+        photoSizes[url] = size
     }
 
     // MARK: Overlays, transitions, framing, format
@@ -1692,20 +1698,50 @@ final class EditorModel: ObservableObject {
     func addSticker(_ emoji: String) {
         guard hasProject else { return }
         do {
-            let url = try Self.stickerImage(emoji)
+            try placeSticker(Self.stickerImage(emoji))
+        } catch {
+            alert = "Couldn't make that sticker: \(error.localizedDescription)"
+        }
+    }
+
+    /// A GIF or sticker from GIPHY: downloaded into the media folder, then placed like an emoji sticker
+    /// (GIFs bigger, stickers small). Plays and loops on the video and in exports.
+    func addGiphy(_ item: Giphy.Item, kind: Giphy.Kind) {
+        guard hasProject else { return }
+        giphyDownloads += 1
+        Task {
+            defer { giphyDownloads -= 1 }
+            do {
+                let url = try await Giphy.download(item)
+                try placeSticker(url, scale: kind == .gifs ? 0.45 : 0.3)
+            } catch {
+                alert = error.localizedDescription
+            }
+        }
+    }
+    /// GIPHY downloads in progress (shown in the background-work pill).
+    @Published private(set) var giphyDownloads = 0
+
+    /// Puts a picture on a free overlay lane at the playhead, small and centered. Animated ones last at
+    /// least 3 s, in whole loops.
+    private func placeSticker(_ url: URL, scale: Double = 0.22) throws {
+        do {
             try loadPhoto(url)
-            var c = ClipItem(url: url, sourceStart: 0, sourceEnd: 3)
+            var length = 3.0
+            if let anim = AnimatedImage.load(url), anim.duration > 0 {
+                length = anim.duration * max(1, (3 / anim.duration).rounded(.up))
+                if length > 12 { length = max(3, anim.duration) }
+            }
+            var c = ClipItem(url: url, sourceStart: 0, sourceEnd: length)
             c.isPhoto = true
             c.profile = .normal
             c.audioMuted = true
-            c.transform = Transform2D(scale: 0.22)
+            c.transform = Transform2D(scale: scale)
             let start = min(clock.time, max(0, project.duration - 0.5))
             let lane = freeOverlayLane(from: start, to: start + c.duration)
             let item = OverlayItem(clip: c, start: start, lane: lane)
             mutate(.push) { $0.overlays.append(item) }
             selection = item.id
-        } catch {
-            alert = "Couldn't make that sticker: \(error.localizedDescription)"
         }
     }
 

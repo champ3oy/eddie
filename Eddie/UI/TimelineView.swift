@@ -1623,56 +1623,9 @@ struct StickerButton: View {
         }
         .help("Add a sticker")
         .popover(isPresented: $open, arrowEdge: .bottom) {
-            StickerPicker { e in model.addSticker(e); open = false }
+            StickerPicker(pickEmoji: { e in model.addSticker(e); open = false },
+                          pickGiphy: { item, kind in model.addGiphy(item, kind: kind); open = false })
         }
-    }
-}
-
-/// Search every emoji by name ("fire", "heart", "dog"…); favorites show when the search is empty.
-struct StickerPicker: View {
-    let pick: (String) -> Void
-    @State private var query = ""
-    @FocusState private var focused: Bool
-
-    var body: some View {
-        let results = EmojiCatalog.search(query)
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(Ink.tertiary)
-                TextField("Search emoji", text: $query)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 12.5))
-                    .focused($focused)
-                    .onSubmit { if let first = results.first { pick(first) } }
-                if !query.isEmpty {
-                    Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(Ink.tertiary) }
-                        .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 8)
-            .frame(height: 28)
-            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white.opacity(0.08)))
-
-            if results.isEmpty {
-                Text("No emoji for “\(query)”")
-                    .font(.system(size: 11.5)).foregroundStyle(Ink.tertiary)
-                    .frame(width: 8 * 34 + 7 * 4, height: 60)
-            } else {
-                ScrollView {
-                    LazyVGrid(columns: Array(repeating: GridItem(.fixed(34), spacing: 4), count: 8), spacing: 4) {
-                        ForEach(results, id: \.self) { e in
-                            Button { pick(e) } label: {
-                                Text(e).font(.system(size: 24)).frame(width: 34, height: 34).contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-                .frame(width: 8 * 34 + 7 * 4, height: min(CGFloat((results.count + 7) / 8) * 38, 8 * 38))
-            }
-        }
-        .padding(10)
-        .onAppear { focused = true }
     }
 }
 
