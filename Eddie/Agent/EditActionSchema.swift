@@ -66,7 +66,8 @@ enum EditActionSchema {
     - format: aspect ("landscape" 16:9 | "portrait" 9:16 for Reels/TikTok/Shorts | "square" | "portrait4x5" | "auto"), \
     optional fill (true = crop to fill the frame, false = fit inside), blur_background (true = a blurred copy of the clip \
     instead of black bars when fitting).
-    - framing: clip or overlay, any of size (zoom, 1 = normal), x and y (offset, -1…1 of the frame, y down), rotation.
+    - framing: clip or overlay, any of size (zoom, 1 = normal), x and y (offset of the center from the frame's center, \
+    in frame widths/heights, y down — e.g. x 0.3, y 0.3 is toward the bottom-right), rotation.
     - ken_burns: clip or overlay (or "all"), optional size (end zoom, e.g. 1.2) — a slow push-in.
     - profile: clip or overlay (or "all"), profile ("dlogM" for log footage | "normal" for phone/normal footage).
     - overlay: target (o1…), optional at, duration, opacity (0–1), layout ("pip" | "full"), volume, and placement: \
@@ -96,7 +97,9 @@ enum EditActionSchema {
     - blend: target (o1…), kind ("normal" | "multiply" | "screen" | "overlay" | "softLight" | "lighten" | "darken" | \
     "difference" | "add").
     - remove_background: clip or overlay, enabled — cut the people out of their background.
-    - sticker: text (an emoji), at, optional size (0.22 default), x, y (offset like framing), rotation.
+    - sticker: text (an emoji), at, duration (default 3 s), optional size (0.22 default), x and y (offset of its center \
+    from the frame's center, in frame widths/heights, y down: x 0.38, y -0.35 is near the top-right corner; 0, 0 is \
+    the middle), rotation.
     - lane: target ("video" | "titles" | "captions" | "overlay0", "overlay1"… | "clipsound" | "audio0"…), kind ("hide" | \
     "show" | "lock" | "unlock").
     Sound:

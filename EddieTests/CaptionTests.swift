@@ -163,3 +163,27 @@ final class CaptionTests: XCTestCase {
         XCTAssertEqual(ranges[0].end, 2.35, accuracy: 0.1)
     }
 }
+
+/// The outline sits outside the letters, so white text stays white.
+final class OutlineTests: XCTestCase {
+    func testOutlinedTextStaysBright() {
+        var t = TitleItem(text: "Lapland at dawn", start: 0, duration: 3, style: .caption)
+        CaptionPreset.all.first { $0.name == "Highlight" }!.apply(&t)
+        t.wordHighlight = false
+        t.animation = .none
+        let frame = CGSize(width: 1280, height: 720)
+        let image = TitleRenderer.overlay(t, renderSize: frame, at: 1)!
+        let px = GradeRenderer.shared.rgba8(image.composited(over: CIImage(color: CIColor(red: 0.5, green: 0.5, blue: 0.5)).cropped(to: CGRect(origin: .zero, size: frame))), maxWidth: 640)
+        var white = 0, black = 0
+        for i in stride(from: 0, to: px.pixels.count, by: 4) {
+            let v = Int(px.pixels[i]) + Int(px.pixels[i + 1]) + Int(px.pixels[i + 2])
+            if v > 700 { white += 1 } else if v < 60 { black += 1 }
+        }
+        if let out = ProcessInfo.processInfo.environment["EDDIE_SNAPSHOT_OUT"] {
+            let cg = GradeRenderer.shared.context.createCGImage(image.composited(over: CIImage(color: CIColor(red: 0.45, green: 0.55, blue: 0.65)).cropped(to: CGRect(origin: .zero, size: frame))).cropped(to: CGRect(x: 200, y: 0, width: 880, height: 160)), from: CGRect(x: 200, y: 0, width: 880, height: 160))!
+            try? NSBitmapImageRep(cgImage: cg).representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: out).appendingPathComponent("outline.png"))
+        }
+        XCTAssertGreaterThan(white, 400, "plenty of white letter pixels")
+        XCTAssertGreaterThan(black, 200, "and a dark outline around them")
+    }
+}

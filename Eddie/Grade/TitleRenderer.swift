@@ -193,12 +193,7 @@ enum TitleRenderer {
         case .center: paragraph.alignment = .center
         case .right: paragraph.alignment = .right
         }
-        var attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color(title.color), .paragraphStyle: paragraph]
-        if title.outline > 0 {
-            // Negative stroke width = fill and stroke (as a percentage of the font size).
-            attributes[.strokeWidth] = -title.outline * 100
-            attributes[.strokeColor] = color(title.outlineColor)
-        }
+        let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color(title.color), .paragraphStyle: paragraph]
         let attributed = NSMutableAttributedString(string: text, attributes: attributes)
         let ns = text as NSString
         // Word-by-word highlight: color the word being spoken.
@@ -218,8 +213,21 @@ enum TitleRenderer {
             if shown < ns.length {
                 let rest = NSRange(location: shown, length: ns.length - shown)
                 attributed.addAttribute(.foregroundColor, value: NSColor.clear, range: rest)
-                attributed.addAttribute(.strokeColor, value: NSColor.clear, range: rest)
             }
+        }
+        // The outline is drawn as its own pass behind the letters (a stroke centered on the edge would eat into them):
+        // twice as wide, so the half outside the letters is the outline.
+        var outlined: NSMutableAttributedString?
+        if title.outline > 0 {
+            let o = NSMutableAttributedString(attributedString: attributed)
+            let all = NSRange(location: 0, length: o.length)
+            o.addAttribute(.strokeWidth, value: title.outline * 200, range: all)   // positive = stroke only
+            o.addAttribute(.strokeColor, value: color(title.outlineColor), range: all)
+            if let reveal = state.reveal {
+                let shown = (text.prefix(max(0, reveal)) as Substring).utf16.count
+                if shown < o.length { o.addAttribute(.strokeColor, value: NSColor.clear, range: NSRange(location: shown, length: o.length - shown)) }
+            }
+            outlined = o
         }
         let setter = CTFramesetterCreateWithAttributedString(attributed)
         let maxWidth = w * 0.9
@@ -248,6 +256,15 @@ enum TitleRenderer {
                           color: color(title.glowColor).withAlphaComponent(CGFloat(min(1, 0.5 + title.glow))).cgColor)
             for _ in 0..<(title.glow > 0.5 ? 2 : 1) { CTFrameDraw(frame, ctx) }
             ctx.restoreGState()
+        }
+        if let outlined {
+            let outlineSetter = CTFramesetterCreateWithAttributedString(outlined)
+            let outlineFrame = CTFramesetterCreateFrame(outlineSetter, CFRange(), CGPath(rect: CGRect(x: pad, y: pad, width: textSize.width, height: textSize.height), transform: nil), nil)
+            ctx.saveGState()
+            ctx.setLineJoin(.round)
+            CTFrameDraw(outlineFrame, ctx)
+            ctx.restoreGState()
+            ctx.setShadow(offset: .zero, blur: 0, color: nil)
         }
         CTFrameDraw(frame, ctx)
         guard let cg = ctx.makeImage() else { return nil }

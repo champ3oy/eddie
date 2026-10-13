@@ -1862,11 +1862,11 @@ final class EditorModel: ObservableObject {
         case .translateCaptions(let language, let bilingual): translateCaptions(to: language, bilingual: bilingual)
         case .removeFillers: removeFillerWords()
         case .removePauses(let minimum): removeSilences(minimum: minimum)
-        case .sticker(let emoji, let at, let transform):
+        case .sticker(let emoji, let at, let duration, let transform):
             seek(to: at)
             addSticker(emoji)
             if let id = selection, project.overlays.contains(where: { $0.id == id }) {
-                updateClip(id, undo: .none) { $0.transform = transform }
+                updateClip(id, undo: .none) { $0.transform = transform; $0.sourceEnd = $0.sourceStart + duration }
             }
         case .extractAudio(let id): extractAudio(id)
         case .speech(let text, let at, let voice, let rate):

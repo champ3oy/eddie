@@ -66,7 +66,7 @@ enum EditJob: Equatable {
     case translateCaptions(language: String, bilingual: Bool)
     case removeFillers
     case removePauses(minimum: Double)
-    case sticker(emoji: String, at: Double, transform: Transform2D)
+    case sticker(emoji: String, at: Double, duration: Double, transform: Transform2D)
     case extractAudio(UUID)
     case speech(text: String, at: Double, voice: String?, rate: Double)
     case voiceEffect(UUID, AudioProcessor.VoiceEffect?)
@@ -563,7 +563,7 @@ enum EditExecutor {
             case "sticker":
                 let emoji = (a.text ?? "").trimmingCharacters(in: .whitespaces)
                 guard !emoji.isEmpty else { errors.append("sticker needs text (an emoji)"); continue }
-                jobs.append(.sticker(emoji: emoji, at: max(0, a.at ?? playhead),
+                jobs.append(.sticker(emoji: emoji, at: max(0, a.at ?? playhead), duration: max(0.3, a.duration ?? 3),
                                      transform: Transform2D(scale: a.size ?? 0.22, x: a.x ?? 0, y: a.y ?? 0, rotation: a.rotation ?? 0)))
                 log.append("Will add a \(emoji) sticker")
 
