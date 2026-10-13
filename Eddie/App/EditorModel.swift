@@ -925,6 +925,8 @@ final class EditorModel: ObservableObject {
                              start: start, duration: min(3, max(1, project.duration - start)), style: style)
         mutate(.push) { $0.titles.append(item) }
         selection = item.id
+        // Titles fade in, so the frame at their very start is blank: step just inside so it shows.
+        seek(to: start + min(0.4, item.duration / 2))
     }
 
     func updateTitle(_ id: UUID, undo: UndoMode = .coalesce, _ change: (inout TitleItem) -> Void) {

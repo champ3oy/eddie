@@ -173,6 +173,7 @@ struct TitleSection: View {
                 .font(.system(size: 13))
                 .lineLimit(1...4)
                 .focused($editing)
+                .demoAnchor("title-text")
                 .padding(.horizontal, 11).padding(.vertical, 7)
                 .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.07)))
                 .onChange(of: text) { if text != item.text { model.updateTitle(item.id) { $0.text = text } } }

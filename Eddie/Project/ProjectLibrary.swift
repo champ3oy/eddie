@@ -22,7 +22,7 @@ final class ProjectLibrary: ObservableObject {
 
     /// The user's library — or a throwaway folder when running inside the test suite, so tests never touch real projects.
     static var defaultRoot: URL {
-        if NSClassFromString("XCTestCase") != nil {
+        if NSClassFromString("XCTestCase") != nil || ProcessInfo.processInfo.environment["EDDIE_DEMO_OUT"] != nil {
             return FileManager.default.temporaryDirectory.appendingPathComponent("EddieTestLibrary-\(ProcessInfo.processInfo.processIdentifier)")
         }
         return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]

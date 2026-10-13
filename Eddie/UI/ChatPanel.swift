@@ -216,6 +216,7 @@ struct Composer: View {
                 .contentTransition(.symbolEffect(.replace))
         }
         .buttonStyle(.plain)
+        .demoAnchor("auto-grade")
         .keyboardShortcut(.return, modifiers: [.command])
         .help(help)
         .disabled(!model.hasProject)

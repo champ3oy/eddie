@@ -19,6 +19,7 @@ struct ViewerView: View {
                 TitleCanvas(clock: model.clock, size: fitted)
             }
             .frame(width: fitted.width, height: fitted.height)
+            .demoAnchor("viewer")
             .clipShape(RoundedRectangle(cornerRadius: 4))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }

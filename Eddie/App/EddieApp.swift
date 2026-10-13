@@ -174,7 +174,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated { EditorModel.shared.saveNow() }
     }
 
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        DemoDirector.startIfRequested()
+    }
+
     func applicationWillFinishLaunching(_ notification: Notification) {
+        if DemoDirector.requested { DemoAnchors.enabled = true }
         Self.migrateSettings()
         // Dark only: windows, menus, popovers and Settings.
         NSApp.appearance = NSAppearance(named: .darkAqua)

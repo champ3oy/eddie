@@ -14,3 +14,7 @@ DerivedData/
 # Secrets, just in case
 .env
 *.env
+
+# Demo recording scratch files
+docs/media/demo-raw.*
+docs/media/demo.log

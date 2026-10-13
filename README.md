@@ -1,11 +1,20 @@
 # Eddie
 
-**A native macOS video editor where AI does the color grading — built for DJI D-Log M footage.**
+**A native macOS video editor where AI does the color grading for you.**
 
-Drop in clips from a DJI Osmo Action 4 shot in 10-bit **D-Log M**, press **Auto Grade**, and an AI model
-looks at your footage and sets the grade for you: exposure, contrast, white balance and more. Then
-edit like you would in any editor — or just ask: *"cut the first clip at 4 s, put the beach shot first,
-add a 'Day 1' title and make it warmer."*
+![Eddie](docs/media/hero.jpg)
+
+Drop in **log footage** — DJI D-Log or D-Log M from an Osmo Action, Pocket, Mini or Mavic, or any other
+log profile — press **Auto Grade**, and an AI model looks at your clips and grades them for you:
+exposure, contrast, white balance and more. Normal footage from a phone works too. Then edit like you
+would in any editor, or just ask: *"cut the first clip at 4 s, put the beach shot first, add a 'Day 1'
+title and make it warmer."*
+
+<p align="center">
+  <img src="docs/media/demo.gif" alt="Eddie demo: AI grading, overlays, titles, music and fades" width="100%">
+</p>
+<p align="center"><sub>AI grade (sped up) · before/after · picture-in-picture overlay · title · music · fade lines ·
+playback — <a href="docs/media/demo.mp4">full-quality video</a></sub></p>
 
 Eddie is written in Swift and SwiftUI on top of AVFoundation and Core Image. Everything runs on
 your Mac; the only thing that ever leaves it is what you send to the AI provider you choose.
@@ -82,8 +91,10 @@ Editing works without a key; only Auto Grade, "Ask Eddie" and AI color need one.
   Cinematic, Golden, Faded, Mono) preview on the frame under the playhead.
 
 ### Color
-- DJI's official **D-Log M → Rec.709** conversion, then exposure, contrast, highlights, shadows, whites,
-  blacks, temperature, tint, vibrance and saturation — all in 16-bit float.
+- Log footage is converted to normal-looking Rec.709 with a LUT first. DJI's **D-Log M** conversion is
+  built in; for D-Log or another camera's log profile, choose its `.cube` LUT in Settings. Then come
+  exposure, contrast, highlights, shadows, whites, blacks, temperature, tint, vibrance and saturation —
+  all in 16-bit float.
 - Each clip is marked **D-Log M** or **Normal** (detected automatically), so phone footage and photos mix
   in without being converted twice.
 - **Original / Graded / Split** view to compare, with a live histogram.
@@ -206,10 +217,15 @@ export, the AI action executor and more. A few opt-in tests need extra setup:
 - **Live AI grading** on a real clip — `TEST_RUNNER_EDDIE_LIVE_CLIP=/path/to/clip.mp4` and a provider key.
 - **Window snapshots** — `TEST_RUNNER_EDDIE_SNAPSHOT_OUT=/some/folder` renders the UI to PNGs.
 
+The demo above is recorded by the app itself: launch it with `EDDIE_DEMO_OUT`, `EDDIE_DEMO_CLIP`,
+`EDDIE_DEMO_OVERLAY` and `EDDIE_DEMO_MUSIC` set (see `Eddie/Demo/DemoDirector.swift`) and it plays a
+scripted edit and records its own window. It needs Screen Recording permission.
+
 ---
 
 ## Credits
 
-- The D-Log M → Rec.709 conversion LUT is published by **DJI** for the Osmo Action 4 and is bundled for
-  convenience; it belongs to DJI.
+- The D-Log M → Rec.709 conversion LUT is published by **DJI** and is bundled for convenience; it
+  belongs to DJI.
+- Demo background art and footage are for illustration only.
 - Built with SwiftUI, AVFoundation, Core Image, Speech and Accelerate.

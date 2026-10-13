@@ -177,6 +177,7 @@ struct TimelineView: View {
                     .frame(width: 20, height: 22)
                     .contentShape(Rectangle())
             }
+            .demoAnchor("play")
             .help("Play / pause (Space) — ← / → step one frame")
 
             (Text(timecode(clock.time)).foregroundStyle(Ink.primary)
@@ -227,12 +228,14 @@ struct TimelineView: View {
         .fixedSize()
         .frame(width: 26, height: 22)
         .help("Add title at the playhead (⌥⌘T) — hold for styles")
+        .demoAnchor("tool-title")
         .disabled(!model.hasProject)
     }
 
     @ViewBuilder private var addTools: some View {
         addClipsTool
         tool("rectangle.on.rectangle", "Add overlay — B-roll or picture-in-picture (⇧⌘I)") { Panels.addOverlay(model) }
+            .demoAnchor("tool-addOverlay")
             .disabled(!model.hasProject)
         Menu {
             Button("Add Music…") { Panels.addMusic(model) }
@@ -247,6 +250,7 @@ struct TimelineView: View {
         .fixedSize()
         .frame(width: 26, height: 22)
         .help("Add music (⌥⌘M) — hold for sound effects")
+        .demoAnchor("tool-music")
         .disabled(!model.hasProject)
         RecordButton(recorder: model.recorder) { model.toggleVoiceover() }
             .disabled(!model.hasProject)
@@ -587,6 +591,7 @@ struct TimelineView: View {
             }
         }
         .frame(width: width, height: videoHeight)
+        .demoAnchor("clip-\(clip.id)")
         .clipShape(RoundedRectangle(cornerRadius: TrackColor.radius, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: TrackColor.radius, style: .continuous)
@@ -892,6 +897,7 @@ struct TimelineView: View {
                       setOut: { v in model.updateMusic(item.id, undo: .none) { $0.fadeOut = v } })
         }
         .frame(width: max(8, CGFloat(item.duration) * pps), height: musicHeight)
+        .demoAnchor("music-\(item.id)")
         .onHover { hoverKey = $0 ? "music-\(item.id)" : (hoverKey == "music-\(item.id)" ? nil : hoverKey) }
         .clipShape(RoundedRectangle(cornerRadius: TrackColor.radius, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: TrackColor.radius, style: .continuous)

@@ -147,6 +147,7 @@ struct EmptyStateView: View {
     @ViewBuilder private var openButton: some View {
         if #available(macOS 26.0, *) {
             Button("Open Video…") { Panels.open(model) }
+                .demoAnchor("open-video")
                 .buttonStyle(.glass)
                 .controlSize(.large)
         } else {
