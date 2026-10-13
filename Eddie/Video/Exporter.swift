@@ -17,9 +17,11 @@ enum Exporter {
         session.videoComposition = clip.makeComposition(state: state)
         try? FileManager.default.removeItem(at: url)
 
+        nonisolated(unsafe) let watched = session
         let monitor = Task {
-            for await s in session.states(updateInterval: 0.25) {
-                if case let .exporting(p) = s { progress(p.fractionCompleted) }
+            while !Task.isCancelled {
+                progress(Double(watched.progress))
+                try? await Task.sleep(nanoseconds: 250_000_000)
             }
         }
         defer { monitor.cancel() }
@@ -53,9 +55,12 @@ enum Exporter {
         session.timeRange = CMTimeRange(start: .zero, duration: ProjectCompiler.time(project.duration))
         try? FileManager.default.removeItem(at: url)
 
+        // Progress by polling: `session.states` traps (crashing the app) when an export fails.
+        nonisolated(unsafe) let watched = session
         let monitor = Task {
-            for await s in session.states(updateInterval: 0.25) {
-                if case let .exporting(p) = s { progress(p.fractionCompleted) }
+            while !Task.isCancelled {
+                progress(Double(watched.progress))
+                try? await Task.sleep(nanoseconds: 250_000_000)
             }
         }
         defer { monitor.cancel() }

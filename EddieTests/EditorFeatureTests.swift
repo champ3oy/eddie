@@ -387,3 +387,35 @@ final class OverlayDragTests: XCTestCase {
         XCTAssertEqual(model.selection, id, "undo keeps the overlay selected too")
     }
 }
+
+/// A slideshow made only of photos (no video clips) exports.
+final class PhotoOnlyExportTests: XCTestCase {
+    func testPhotoSlideshowExports() async throws {
+        let photo = Bundle(for: Self.self).url(forResource: "photo_test", withExtension: "jpg")!
+        func slide(_ i: Int) -> ClipItem {
+            var c = ClipItem(url: photo, sourceStart: 0, sourceEnd: 4)
+            c.isPhoto = true
+            c.profile = .normal
+            if i > 0 { c.transitionIn = Transition(kind: .crossDissolve, duration: 0.6) }
+            return c
+        }
+        var p = Project(clips: [slide(0), slide(1), slide(2)])
+        p.clips[0].transitionIn = Transition(kind: .dipToBlack, duration: 0.6)
+        p.fadeOut = 0.6
+        p.titles = [TitleItem(text: "Welcome", start: 0.3, duration: 3, style: .title)]
+        let pool = MediaPool(videos: [:], audio: [:], photos: [photo: CGSize(width: 800, height: 600)])
+        for codec in [ExportSettings.Codec.h264, .hevc] {
+            let s = ExportSettings(codec: codec, resolution: .project, frameRate: .project)
+            let out = FileManager.default.temporaryDirectory.appendingPathComponent("slideshow-\(UUID().uuidString.prefix(6)).\(s.fileExtension)")
+            try await Exporter.export(project: p, pool: pool, lut: .djiAction4, settings: s, to: out) { _ in }
+            let d = try await AVURLAsset(url: out).load(.duration).seconds
+            XCTAssertEqual(d, p.duration, accuracy: 0.1, "\(codec)")
+            // The picture is the photo (orange), not the black filler under it.
+            let g = AVAssetImageGenerator(asset: AVURLAsset(url: out))
+            let (cg, _) = try await g.image(at: CMTime(seconds: 5, preferredTimescale: 600))
+            let px = GradeRenderer.shared.rgba8(CIImage(cgImage: cg), maxWidth: 32)
+            let rgb = FrameStats(rgba: px.pixels, width: px.width, height: px.height).meanRGB
+            XCTAssertGreaterThan(rgb[0], rgb[2] + 0.2, "\(codec): orange photo, got \(rgb)")
+        }
+    }
+}

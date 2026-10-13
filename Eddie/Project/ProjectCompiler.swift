@@ -59,6 +59,24 @@ enum ProjectCompiler {
         try compile(project, pool: MediaPool(videos: media, audio: music), state: state, frameRate: frameRate, renderSize: renderSize)
     }
 
+    /// One second of 64×64 black (bundled), used under photo-only edits so they can be exported.
+    /// The asset is kept alive alongside its track (a track whose asset is gone can't be inserted).
+    nonisolated(unsafe) static let carrier: (asset: AVURLAsset, track: AVAssetTrack)? = {
+        let url = Bundle(for: GradeState.self).url(forResource: "carrier", withExtension: "mov")
+            ?? Bundle.main.url(forResource: "carrier", withExtension: "mov")
+        guard let url else { return nil }
+        let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
+        let done = DispatchSemaphore(value: 0)
+        nonisolated(unsafe) var track: AVAssetTrack?
+        Task.detached {
+            track = try? await asset.loadTracks(withMediaType: .video).first
+            done.signal()
+        }
+        done.wait()
+        return track.map { (asset, $0) }
+    }()
+    static var carrierTrack: AVAssetTrack? { carrier?.track }
+
     /// The project's frame size: the first clip's, shaped by the project format.
     static func frameSize(_ project: Project, pool: MediaPool) -> CGSize {
         guard let first = project.clips.first else { return CGSize(width: 1920, height: 1080) }
@@ -185,6 +203,16 @@ enum ProjectCompiler {
                                         fadeFromBlack: o.clip.transitionIn?.duration ?? 0))
             }
             instructions.append(GradeInstruction(timeRange: CMTimeRange(start: time(a), end: time(b)), layers: layers, state: state))
+        }
+
+        // An edit made only of photos has no real video, and AVFoundation won't export a composition without
+        // any ("Operation Stopped"). A tiny black clip stretched under the whole edit gives it one; the
+        // compositor never draws it.
+        let hasFootage = composition.tracks(withMediaType: .video).contains { $0.segments.contains { !$0.isEmpty } }
+        if !hasFootage, total > 0, let carrier = Self.carrierTrack, let ct = newTrack(.video) {
+            let one = CMTimeRange(start: .zero, duration: carrier.timeRange.duration)
+            try ct.insertTimeRange(one, of: carrier, at: .zero)
+            ct.scaleTimeRange(CMTimeRange(start: .zero, duration: one.duration), toDuration: time(total))
         }
 
         // Drop tracks that ended up with nothing on them (e.g. the second main track of a one-clip edit).

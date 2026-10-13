@@ -73,6 +73,7 @@
 		E56A69CF5E287183112F734C /* WindowRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40DA16F2FA74D0CB5F9D54CC /* WindowRecorder.swift */; };
 		E627AC91778D0EAAE01503D3 /* ProjectCompiler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FF50ABA40C8FEECE509A463 /* ProjectCompiler.swift */; };
 		E7985ACDD475A29B592AACD0 /* EditingAgent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E43A7A36E70D5B201E290A2B /* EditingAgent.swift */; };
+		F06C7353CB434182DE62BF20 /* carrier.mov in Resources */ = {isa = PBXBuildFile; fileRef = 2E370A95CD22BC37AFC1D830 /* carrier.mov */; };
 		F67D0C7D4CE7C93FAF266795 /* VisionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AAED6A730D2B97BEEFFA6EA /* VisionModel.swift */; };
 		F821E9C04856EA82C2BA9686 /* Exporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B70331E733FC30EBE4492937 /* Exporter.swift */; };
 		FFBA8C549332AA9865FD07B1 /* LiveGradeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F370332329258DC541EB92FD /* LiveGradeTests.swift */; };
@@ -124,6 +125,7 @@
 		28650FE41DA80BD38EBCC175 /* InspectorDetails.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorDetails.swift; sourceTree = "<group>"; };
 		2A034D5320B317E3C48F7CD4 /* speech.mov */ = {isa = PBXFileReference; lastKnownFileType = video.quicktime; path = speech.mov; sourceTree = "<group>"; };
 		2AAED6A730D2B97BEEFFA6EA /* VisionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionModel.swift; sourceTree = "<group>"; };
+		2E370A95CD22BC37AFC1D830 /* carrier.mov */ = {isa = PBXFileReference; lastKnownFileType = video.quicktime; path = carrier.mov; sourceTree = "<group>"; };
 		3071B2327D62E6C5064D9139 /* VoiceRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceRecorder.swift; sourceTree = "<group>"; };
 		3768F4B1BD04238C6E00BFF7 /* LibraryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryTests.swift; sourceTree = "<group>"; };
 		3B9CA35765104A98DB24AE58 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
@@ -255,6 +257,7 @@
 			isa = PBXGroup;
 			children = (
 				16836AE9DA7E118694BDBF4E /* Assets.xcassets */,
+				2E370A95CD22BC37AFC1D830 /* carrier.mov */,
 				5F90FD0B097F376D83D43EA2 /* DJI_Action4_DLogM_to_Rec709.cube */,
 			);
 			path = Resources;
@@ -497,6 +500,7 @@
 			files = (
 				B0205E69FFC76B1A46082809 /* Assets.xcassets in Resources */,
 				25B654CFF03BF3130CEC336B /* DJI_Action4_DLogM_to_Rec709.cube in Resources */,
+				F06C7353CB434182DE62BF20 /* carrier.mov in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
