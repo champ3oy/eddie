@@ -127,7 +127,7 @@ struct CaptionsPanel: View {
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 4) {
                             ForEach(captions) { c in
-                                CaptionRow(caption: c, clock: model.clock).id(c.id)
+                                CaptionRow(caption: c, clock: model.clock.coarse).id(c.id)
                             }
                         }
                         .padding(.bottom, 12)
@@ -169,7 +169,7 @@ struct CaptionsPanel: View {
 private struct CaptionRow: View {
     @EnvironmentObject var model: EditorModel
     let caption: TitleItem
-    @ObservedObject var clock: PlaybackClock
+    @ObservedObject var clock: PlaybackClock.Ticker
     @State private var text = ""
     @State private var hovering = false
     @FocusState private var editing: Bool

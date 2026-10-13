@@ -47,7 +47,20 @@ final class EditorModel: ObservableObject {
             rebuild()
         }
     }
-    private var proxyJobs: Set<URL> = []
+    /// How sharp the viewer is while editing (export is always full size). Lower is smoother on big edits.
+    enum PreviewQuality: Double, CaseIterable, Identifiable {
+        case full = 1, half = 0.5, quarter = 0.25
+        var id: Double { rawValue }
+        var label: String { switch self { case .full: "Full"; case .half: "Half"; case .quarter: "Quarter" } }
+    }
+    @Published var previewQuality = PreviewQuality(rawValue: UserDefaults.standard.double(forKey: "previewQuality")) ?? .full {
+        didSet {
+            guard previewQuality != oldValue else { return }
+            UserDefaults.standard.set(previewQuality.rawValue, forKey: "previewQuality")
+            rebuild()
+        }
+    }
+    private var proxyJobs: Set<URL> = [] { didSet { activity.proxies = proxyJobs.count } }
     @Published private(set) var frameRate: Float = 30
     private(set) var media: [URL: VideoClip] = [:]
     private(set) var musicMedia: [URL: MusicSource] = [:]
@@ -113,7 +126,7 @@ final class EditorModel: ObservableObject {
     @Published private(set) var redoStack: [Project] = []
     private var lastCoalescedEdit = Date.distantPast
     private var interacting = false
-    private var structureAtInteractionStart = ""
+    private var structureAtInteractionStart = StructureKey(Project())
 
     var canUndo: Bool { !undoStack.isEmpty }
     var canRedo: Bool { !redoStack.isEmpty }
@@ -122,7 +135,9 @@ final class EditorModel: ObservableObject {
 
     @Published private(set) var clipThumbs: [UUID: [CGImage]] = [:]
     @Published private(set) var waveforms: [URL: [Float]] = [:]
-    private var thumbKeys: [UUID: String] = [:]
+    /// What each clip's filmstrip was drawn from; it's redrawn only when this changes.
+    private struct ThumbKey: Equatable { var start: Double, end: Double, recipe: GradeRecipe, lut: String }
+    private var thumbKeys: [UUID: ThumbKey] = [:]
     private var thumbTask: Task<Void, Never>?
 
     // MARK: Presets
@@ -133,6 +148,8 @@ final class EditorModel: ObservableObject {
     private var presetBase: GradeRecipe?
     private var applyingPreset = false
     private var previewSource: CIImage?
+    private struct PresetKey: Equatable { var source: ObjectIdentifier, recipe: GradeRecipe, lut: String, applyLUT: Bool }
+    private var presetKey: PresetKey?
     private var previewTask: Task<Void, Never>?
     private var previewTimeWatch: AnyCancellable?
 
@@ -140,14 +157,28 @@ final class EditorModel: ObservableObject {
 
     @Published private(set) var log: [LogEntry] = []
     @Published private(set) var busy = false
-    @Published private(set) var status: String?
+    /// The AI's progress message. Lives in `activity` so it only redraws the line that shows it.
+    private(set) var status: String? {
+        get { activity.status }
+        set { activity.status = newValue }
+    }
+    /// Values that change many times a second (export %, AI progress), watched only by the views that show them.
+    let activity = Activity()
     @Published private(set) var note: ColoristNote?
     @Published private(set) var errorMessage: String?
     /// The clip the AI is grading right now (drawn with moving stripes).
     @Published private(set) var gradingClipID: UUID?
     /// The editing assistant's latest answer, shown above the composer.
     @Published var assistantReply: String?
-    @Published private(set) var exportProgress: Double?
+    /// Export progress (0–1) while exporting. The window only redraws when an export starts or ends.
+    private(set) var exportProgress: Double? {
+        get { activity.exportProgress }
+        set {
+            let changed = (activity.exportProgress == nil) != (newValue == nil)
+            if changed { objectWillChange.send() }
+            activity.exportProgress = newValue
+        }
+    }
     @Published var alert: String?
 
     private let state: GradeState
@@ -243,6 +274,16 @@ final class EditorModel: ObservableObject {
 
     /// Every project change goes through here: records undo, then updates the player.
     func mutate(_ undo: UndoMode = .push, _ change: (inout Project) -> Void) {
+        // During a drag the mouse sends more changes than the screen can show (up to 120 a second).
+        // They're applied to a draft right away and shown once per display frame.
+        if undo == .none, interacting {
+            var next = dragDraft ?? project
+            change(&next)
+            dragDraft = next
+            scheduleDraftFlush()
+            return
+        }
+        flushDragDraft()
         // Live drag updates use `.none`; any other edit means no drag is really in progress
         // (macOS can cancel a drag without reporting its end), so settle it first.
         if undo != .none, interacting { endInteraction() }
@@ -261,6 +302,29 @@ final class EditorModel: ObservableObject {
         setProject(next)
     }
 
+    /// Drag changes not shown yet (see `mutate`).
+    private var dragDraft: Project?
+    private var draftFlushScheduled = false
+    private var lastDraftFlush = Date.distantPast
+
+    private func scheduleDraftFlush() {
+        guard !draftFlushScheduled else { return }
+        draftFlushScheduled = true
+        let wait = max(0, 1.0 / 60 - Date().timeIntervalSince(lastDraftFlush))
+        DispatchQueue.main.asyncAfter(deadline: .now() + wait) { [weak self] in
+            MainActor.assumeIsolated { self?.flushDragDraft() }
+        }
+    }
+
+    /// Shows the latest drag change now.
+    func flushDragDraft() {
+        draftFlushScheduled = false
+        guard let next = dragDraft else { return }
+        dragDraft = nil
+        lastDraftFlush = Date()
+        if next != project { setProject(next) }
+    }
+
     private func pushUndo() {
         undoStack.append(project)
         if undoStack.count > 200 { undoStack.removeFirst() }
@@ -268,6 +332,7 @@ final class EditorModel: ObservableObject {
     }
 
     func undo() {
+        flushDragDraft()
         guard let previous = undoStack.popLast() else { return }
         redoStack.append(project)
         activePreset = nil
@@ -285,30 +350,38 @@ final class EditorModel: ObservableObject {
     func beginInteraction() {
         if interacting { endInteraction() }   // a previous drag never reported its end
         interacting = true
-        structureAtInteractionStart = Self.structure(project)
+        structureAtInteractionStart = StructureKey(project)
         pushUndo()
     }
 
     func endInteraction() {
         guard interacting else { return }
+        flushDragDraft()
         interacting = false
         // Moving or rotating a title doesn't change the composition; only rebuild when it did.
-        if Self.structure(project) != structureAtInteractionStart { rebuild() }
+        if StructureKey(project) != structureAtInteractionStart { rebuild() }
         scheduleThumbnails()
         renderPresetThumbs()
         scheduleAutosave()
     }
 
+    /// The current project's `StructureKey` (kept, so each edit only builds the new one).
+    private var structureKey = StructureKey(Project())
+
     private func setProject(_ next: Project) {
-        let old = project
         project = next
         // Keep the selection unless the selected thing is gone (any kind: clip, overlay, song, title, marker).
         if let s = selection, !Self.contains(next, s) {
             selection = next.clips.first?.id
         }
-        extraSelection = extraSelection.filter { Self.contains(next, $0) }
-        if selection == nil { selection = next.clips.first?.id }
-        if Self.structure(old) != Self.structure(next) {
+        // Only assign when something is gone: every assignment redraws every panel.
+        if extraSelection.contains(where: { !Self.contains(next, $0) }) {
+            extraSelection = extraSelection.filter { Self.contains(next, $0) }
+        }
+        if selection == nil, let first = next.clips.first?.id { selection = first }
+        let key = StructureKey(next)
+        if key != structureKey {
+            structureKey = key
             if !interacting { rebuild() } else { clock.duration = next.duration }
         } else {
             pushState()
@@ -327,15 +400,36 @@ final class EditorModel: ObservableObject {
 
     /// Everything that needs a new composition (not grades).
     /// Grade, framing, keyframes, source type and overlay opacity are drawn live and don't count.
-    private static func structure(_ p: Project) -> String {
-        func clipKey(_ c: ClipItem) -> String {
-            "\(c.id)|\(c.url.path)|\(c.sourceStart)|\(c.sourceEnd)|\(c.speed)|\(c.audioMuted)|\(c.volume)|\(c.isPhoto)|"
-                + "\(String(describing: c.transitionIn))|\(c.audioFadeIn)|\(c.audioFadeOut)|\(String(describing: c.audioOverride))|\(c.reversed)|\(String(describing: c.reversedURL))"
-                + "|\(c.volumePoints.map { "\($0.time):\($0.level)" })"
+    /// Plain values compared field by field — cheap enough to check on every drag step.
+    struct StructureKey: Equatable {
+        struct Clip: Equatable {
+            var id: UUID, url: URL, sourceStart: Double, sourceEnd: Double, speed: Double, audioMuted: Bool, volume: Double
+            var isPhoto: Bool, transitionIn: Transition?, audioFadeIn: Double, audioFadeOut: Double, audioOverride: URL?
+            var reversed: Bool, reversedURL: URL?, volumePoints: [VolumePoint]
+            init(_ c: ClipItem) {
+                id = c.id; url = c.url; sourceStart = c.sourceStart; sourceEnd = c.sourceEnd; speed = c.speed
+                audioMuted = c.audioMuted; volume = c.volume; isPhoto = c.isPhoto; transitionIn = c.transitionIn
+                audioFadeIn = c.audioFadeIn; audioFadeOut = c.audioFadeOut; audioOverride = c.audioOverride
+                reversed = c.reversed; reversedURL = c.reversedURL; volumePoints = c.volumePoints
+            }
         }
-        return "\(p.duckUnderMusic)|\(p.fadeOut)|\(p.format.aspect)|\(p.mutedLanes.sorted())#" + p.clips.map(clipKey).joined(separator: ";")
-            + "#" + p.overlays.map { "\(clipKey($0.clip))@\($0.start)L\($0.lane)" }.joined(separator: ";")
-            + "#" + p.music.map { "\($0.id)|\($0.playURL.path)|\($0.start)|\($0.sourceStart)|\($0.sourceEnd)|\($0.volume)|\($0.fadeIn)|\($0.fadeOut)|\($0.kind)|\($0.volumePoints.map { "\($0.time):\($0.level)" })" }.joined(separator: ";")
+        struct Overlay: Equatable { var clip: Clip, start: Double, lane: Int }
+        struct Song: Equatable {
+            var id: UUID, url: URL, start: Double, sourceStart: Double, sourceEnd: Double, volume: Double
+            var fadeIn: Double, fadeOut: Double, kind: MusicItem.Kind, volumePoints: [VolumePoint]
+        }
+        var duck: Bool, fadeOut: Double, aspect: ProjectFormat.Aspect, muted: Set<String>
+        var clips: [Clip], overlays: [Overlay], music: [Song]
+
+        init(_ p: Project) {
+            duck = p.duckUnderMusic; fadeOut = p.fadeOut; aspect = p.format.aspect; muted = p.mutedLanes
+            clips = p.clips.map(Clip.init)
+            overlays = p.overlays.map { Overlay(clip: Clip($0.clip), start: $0.start, lane: $0.lane) }
+            music = p.music.map {
+                Song(id: $0.id, url: $0.playURL, start: $0.start, sourceStart: $0.sourceStart, sourceEnd: $0.sourceEnd,
+                     volume: $0.volume, fadeIn: $0.fadeIn, fadeOut: $0.fadeOut, kind: $0.kind, volumePoints: $0.volumePoints)
+            }
+        }
     }
 
     // MARK: - Opening, adding
@@ -376,6 +470,8 @@ final class EditorModel: ObservableObject {
         thumbKeys = [:]
         frameCache = [:]
         presetThumbs = [:]
+        previewSourceKey = nil
+        presetKey = nil
         errorMessage = nil
         note = nil
         player.replaceCurrentItem(with: nil)
@@ -1001,22 +1097,24 @@ final class EditorModel: ObservableObject {
         autosaveTask = Task {
             try? await Task.sleep(for: .seconds(1))
             guard !Task.isCancelled else { return }
-            saveNow()
+            saveNow(background: true)
         }
     }
 
-    /// Writes the project to the library now (if it changed).
-    func saveNow() {
+    /// Writes the project to the library now (if it changed). Autosave writes the files in the background;
+    /// an explicit save (or quitting) waits for them.
+    func saveNow(background: Bool = false) {
         autosaveTask?.cancel()
         guard let id = currentProjectID, !loadingProject else { return }
         let thumb = project.clips.first.flatMap { clipThumbs[$0.id]?.first }
         do {
             if project != lastSaved {
-                try library.save(project, id: id, thumbnail: thumb)
+                // The thumbnail only needs writing when it's new.
+                try library.save(project, id: id, thumbnail: thumbnailSaved ? nil : thumb, background: background)
                 lastSaved = project
-                thumbnailSaved = thumb != nil
+                thumbnailSaved = thumbnailSaved || thumb != nil
             } else if let thumb, !thumbnailSaved {
-                try library.updateThumbnail(thumb, id: id)   // a new thumbnail isn't an edit
+                try library.updateThumbnail(thumb, id: id, background: background)   // a new thumbnail isn't an edit
                 thumbnailSaved = true
             }
         } catch {
@@ -1753,6 +1851,7 @@ final class EditorModel: ObservableObject {
 
     /// Recompiles the project into a new player item, keeping the playhead.
     private func rebuild() {
+        structureKey = StructureKey(project)
         guard !project.isEmpty else {
             player.replaceCurrentItem(with: nil)
             clock.duration = 0
@@ -1767,6 +1866,10 @@ final class EditorModel: ObservableObject {
                 for (url, proxy) in proxyMedia { preview.videos[url] = proxy }
                 let s = min(1, 1920 / max(full.width, full.height))
                 size = CGSize(width: (full.width * s / 2).rounded() * 2, height: (full.height * s / 2).rounded() * 2)
+            }
+            if previewQuality != .full {
+                let q = max(CGFloat(previewQuality.rawValue), 240 / max(1, min(size.width, size.height)))
+                size = CGSize(width: (size.width * q / 2).rounded() * 2, height: (size.height * q / 2).rounded() * 2)
             }
             let compiled = try ProjectCompiler.compile(project, pool: preview, state: state, renderSize: size)
             projectSize = full
@@ -1793,7 +1896,24 @@ final class EditorModel: ObservableObject {
     }
 
     /// While playing, the next frame picks the new grade up. While paused, force a redraw.
+    /// At most one redraw per display frame — a drag sends many more changes than that.
     private func refreshPausedFrame() {
+        guard player.rate == 0, !refreshPending else { return }
+        let wait = 1.0 / 30 - Date().timeIntervalSince(lastRefresh)
+        if wait <= 0 { redrawPausedFrame(); return }
+        refreshPending = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + wait) { [weak self] in
+            MainActor.assumeIsolated {
+                self?.refreshPending = false
+                self?.redrawPausedFrame()
+            }
+        }
+    }
+    private var refreshPending = false
+    private var lastRefresh = Date.distantPast
+
+    private func redrawPausedFrame() {
+        lastRefresh = Date()
         guard let item = player.currentItem, let videoComposition, player.rate == 0 else { return }
         item.videoComposition = videoComposition.mutableCopy() as? AVVideoComposition
         player.seek(to: item.currentTime(), toleranceBefore: .zero, toleranceAfter: .zero)
@@ -2091,7 +2211,10 @@ final class EditorModel: ObservableObject {
     @Published var showingExport = false
 
     /// The file being exported (for the progress bar).
-    @Published private(set) var exportingName: String?
+    private(set) var exportingName: String? {
+        get { activity.exportingName }
+        set { activity.exportingName = newValue }
+    }
     private var exportTask: Task<Void, Never>?
 
     func export(to url: URL, settings: ExportSettings = .init()) {
@@ -2142,7 +2265,7 @@ final class EditorModel: ObservableObject {
     private func scheduleThumbnails() {
         let lutTitle = lut.title
         let pending = (project.clips + project.overlays.map(\.clip)).filter { c in
-            thumbKeys[c.id] != "\(c.sourceStart)|\(c.sourceEnd)|\(c.effectiveRecipe.jsonString())|\(lutTitle)"
+            thumbKeys[c.id] != ThumbKey(start: c.sourceStart, end: c.sourceEnd, recipe: c.effectiveRecipe, lut: lutTitle)
         }
         guard !pending.isEmpty else { return }
         thumbTask?.cancel()
@@ -2161,37 +2284,49 @@ final class EditorModel: ObservableObject {
                 if !images.isEmpty {
                     clipThumbs[c.id] = images
                     if c.id == project.clips.first?.id { thumbnailSaved = false; scheduleAutosave() }
-                    thumbKeys[c.id] = "\(c.sourceStart)|\(c.sourceEnd)|\(c.effectiveRecipe.jsonString())|\(lutTitle)"
+                    thumbKeys[c.id] = ThumbKey(start: c.sourceStart, end: c.sourceEnd, recipe: c.effectiveRecipe, lut: lutTitle)
                 }
             }
         }
     }
 
     /// Decodes the raw frame under the playhead (or the middle of the selected clip), then re-renders preset previews.
+    /// The look previews use one fixed frame per clip (from its middle), not whatever is under the playhead,
+    /// so they don't change (or re-render) as you scrub or play.
     private func loadPreviewFrame() {
-        guard let clip = selectedClip else { return }
+        guard let clip = selectedClip ?? project.clips.first else { return }
+        let mid = (clip.sourceStart + clip.sourceEnd) / 2
+        let key = "\(clip.url.path)|\(clip.isPhoto ? 0 : (mid * 2).rounded() / 2)"
+        guard key != previewSourceKey else { renderPresetThumbs(); return }
         if clip.isPhoto, let still = StillCache.image(clip.url) {
             let s = min(1, 240 / max(1, still.extent.width))
             previewSource = GradeRenderer.shared.materialize(still.transformed(by: CGAffineTransform(scaleX: s, y: s)))
+            previewSourceKey = key
+            presetKey = nil
             renderPresetThumbs()
             return
         }
         guard let info = media[clip.url] else { return }
-        var sourceTime = (clip.sourceStart + clip.sourceEnd) / 2
-        if let hit = project.locate(clock.time), project.clips[hit.index].id == clip.id { sourceTime = hit.sourceTime }
         Task {
-            guard let frame = try? await FrameSampler.frames(of: info, at: [ProjectCompiler.time(sourceTime)], maxWidth: 240).first,
-                  self.selectedClip?.id == clip.id else { return }
+            guard let frame = try? await FrameSampler.frames(of: info, at: [ProjectCompiler.time(mid)], maxWidth: 240).first,
+                  (self.selectedClip ?? self.project.clips.first)?.id == clip.id else { return }
             previewSource = frame.image
+            previewSourceKey = key
+            presetKey = nil
             renderPresetThumbs()
         }
     }
+    private var previewSourceKey: String?
 
     private func renderPresetThumbs() {
         guard let source = previewSource else { return }
-        previewTask?.cancel()
         // Previews show each preset on the pre-preset grade, so they don't inherit the active one.
         let base = presetBase ?? effectiveRecipe, lut = self.lut, applyLUT = selectedClip?.profile != .normal
+        // Most edits (moving a title, trimming…) don't touch what the previews show: skip them.
+        let key = PresetKey(source: ObjectIdentifier(source), recipe: base, lut: lut.title, applyLUT: applyLUT)
+        guard key != presetKey else { return }
+        presetKey = key
+        previewTask?.cancel()
         previewTask = Task.detached(priority: .userInitiated) {
             var out: [String: CGImage] = [:]
             let renderer = GradeRenderer.shared
@@ -2219,12 +2354,37 @@ final class EditorModel: ObservableObject {
     }
 }
 
-/// Playback position, published separately so only the timeline redraws while the video plays.
-@MainActor
-final class PlaybackClock: ObservableObject {
-    @Published var time: Double = 0
+/// Fast-changing status, split out of `EditorModel` so updates don't redraw the whole window.
+@MainActor final class Activity: ObservableObject {
+    @Published var exportProgress: Double?
+    @Published var exportingName: String?
+    @Published var status: String?
+    /// 4K videos being turned into light playback copies.
+    @Published var proxies = 0
+}
+
+/// The playhead. `time` changes 30 times a second while playing, so only the playhead and the timecode
+/// watch it directly; everything else that follows the playhead watches `coarse` (see `Ticker`).
+@MainActor final class PlaybackClock: ObservableObject {
+    @Published var time: Double = 0 { didSet { coarse.timeChanged(time, playing: playing) } }
     @Published var duration: Double = 0
-    @Published private(set) var playing = false
+    @Published private(set) var playing = false { didSet { if playing != oldValue { coarse.fire() } } }
+    /// Fires on every change while paused (scrubbing stays live), but only 4 times a second while playing.
+    let coarse = Ticker()
+
+    @MainActor final class Ticker: ObservableObject {
+        private var last = Date.distantPast
+        /// Always current; views are just told about it less often.
+        private(set) var time: Double = 0
+        func timeChanged(_ t: Double, playing: Bool) {
+            time = t
+            if !playing || Date().timeIntervalSince(last) >= 0.25 { fire() }
+        }
+        func fire() {
+            last = Date()
+            objectWillChange.send()
+        }
+    }
     private var observer: Any?
     private var rateObservation: AnyCancellable?
 
@@ -2388,6 +2548,9 @@ final class ScopeMonitor: ObservableObject {
     private var timer: Timer?
     private let queue = DispatchQueue(label: "eddie.scope", qos: .utility)
     private var computing = false
+    /// How many histograms are on screen; with none, nothing is computed.
+    var viewers = 0
+    private var lastCompute = Date.distantPast
 
     func attach(to item: AVPlayerItem) {
         if let output, let old = self.item { old.remove(output) }
@@ -2404,7 +2567,12 @@ final class ScopeMonitor: ObservableObject {
     }
 
     private func tick() {
-        guard !computing, let output, let item else { return }
+        // The debug tools read `lastFrame`, so they keep it fresh even with no histogram showing.
+        guard !computing, let output, let item, viewers > 0 || AgentTools.debugEnabled else { return }
+        // While playing, twice a second is plenty for a histogram.
+        let playing = item.timebase.map { CMTimebaseGetRate($0) != 0 } ?? false
+        if playing, Date().timeIntervalSince(lastCompute) < 0.5 { return }
+        lastCompute = Date()
         let time = item.currentTime()
         guard output.hasNewPixelBuffer(forItemTime: time),
               let buffer = output.copyPixelBuffer(forItemTime: time, itemTimeForDisplay: nil) else { return }

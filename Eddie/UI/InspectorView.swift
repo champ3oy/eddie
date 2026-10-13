@@ -416,6 +416,9 @@ struct HistogramView: View {
             }
         }
         .frame(height: 96)
+        // The scope only measures frames while a histogram is on screen.
+        .onAppear { scope.viewers += 1 }
+        .onDisappear { scope.viewers = max(0, scope.viewers - 1) }
     }
 
     private func clipMark(_ on: Bool, help: String) -> some View {

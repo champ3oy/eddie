@@ -5,7 +5,8 @@ import SwiftUI
 /// under one white playhead. Clips can be selected, dragged to reorder and trimmed from either edge.
 struct TimelineView: View {
     @EnvironmentObject var model: EditorModel
-    @ObservedObject var clock: PlaybackClock
+    /// Not observed: only `Playhead` and `Transport` redraw as the playhead moves, not every lane.
+    let clock: PlaybackClock
     /// Timeline scale in points per second. Set once (fit to the edit) and then only changed by zooming —
     /// trimming or adding clips doesn't rescale the timeline. nil until there's something to fit.
     private var pps: CGFloat? {
@@ -13,7 +14,9 @@ struct TimelineView: View {
         nonmutating set { model.timelineScale = newValue }
     }
     @State private var viewport: CGFloat = 800
-    @State private var scrollX: CGFloat = 0
+    /// Scroll offset, kept outside SwiftUI state so scrolling doesn't redraw the lanes.
+    @State private var scroll = ScrollBox()
+    private var scrollX: CGFloat { scroll.x }
     @State private var scrollPosition = ScrollPosition(edge: .leading)
     @State private var pinchBase: CGFloat?
     // Rearranging: the dragged clip follows the pointer; the others slide aside to open a gap at `dragTarget`.
@@ -41,6 +44,8 @@ struct TimelineView: View {
     @State private var fadeOrigin: (key: String, value: Double)?
     @State private var volumeOrigin: (point: UUID, time: Double, level: Double)?
     @State private var showSpeech = false
+    private enum ToolsSize { case full, medium, compact }
+    @State private var toolsSize = ToolsSize.full
     @GestureState private var fadeDragActive = false
 
     private let gutter: CGFloat = 40
@@ -59,7 +64,14 @@ struct TimelineView: View {
     private var overlayLanes: Int { max(1, (model.project.overlays.map(\.lane).max() ?? 0) + 1) }
     private var overlayLanesHeight: CGFloat { CGFloat(overlayLanes) * overlayHeight + CGFloat(overlayLanes - 1) * gap }
     private var musicLanesHeight: CGFloat { CGFloat(audioLanes) * musicHeight + CGFloat(audioLanes - 1) * gap }
-    private var lanesHeight: CGFloat { titleHeight * 3 + overlayLanesHeight + gradeHeight + videoHeight + audioHeight + musicLanesHeight + gap * 7 }
+    /// The captions and effects lanes only show once something is on them.
+    private var showCaptionsLane: Bool { model.project.titles.contains { $0.isCaption } }
+    private var showEffectsLane: Bool { !model.project.effects.isEmpty }
+    private var optionalLanes: CGFloat { CGFloat((showCaptionsLane ? 1 : 0) + (showEffectsLane ? 1 : 0)) }
+    private var lanesHeight: CGFloat {
+        titleHeight * (1 + optionalLanes) + overlayLanesHeight + gradeHeight + videoHeight + audioHeight + musicLanesHeight
+            + gap * (5 + optionalLanes)
+    }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -74,7 +86,7 @@ struct TimelineView: View {
                     }
                     .scrollIndicators(.automatic)
                     .scrollPosition($scrollPosition)
-                    .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.x } action: { _, x in scrollX = x }
+                    .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.x } action: { _, x in scroll.x = x }
                     // Pinch on the trackpad to zoom around the pointer's time.
                     .simultaneousGesture(MagnifyGesture()
                         .onChanged { v in
@@ -111,12 +123,6 @@ struct TimelineView: View {
         // A new project gets its own fit; adding the first clips fits once.
         .onChange(of: model.project.duration) { _, d in
             if d == 0 { pps = nil } else { fitIfNeeded() }
-        }
-        // While playing, page along so the playhead stays in view.
-        .onChange(of: clock.time) { _, t in
-            guard clock.playing, pps != nil else { return }
-            let x = CGFloat(t) * scale
-            if x > scrollX + viewport - 30 || x < scrollX { scrollPosition.scrollTo(x: max(0, x - 30)) }
         }
         .onChange(of: titleDragActive) { _, active in
             if !active, titleOrigin != nil || effectOrigin != nil { titleOrigin = nil; effectOrigin = nil; snapGuide = nil; model.endInteraction() }
@@ -178,31 +184,29 @@ struct TimelineView: View {
     private var header: some View {
         HStack(spacing: 12) {
             // Play / pause and the time — frame stepping is on ← / →.
-            Button { model.togglePlay() } label: {
-                Image(systemName: clock.playing ? "pause.fill" : "play.fill")
-                    .font(.system(size: 14))
-                    .frame(width: 20, height: 22)
-                    .contentShape(Rectangle())
-            }
-            .demoAnchor("play")
-            .help("Play / pause (Space) — ← / → step one frame")
-
-            (Text(timecode(clock.time)).foregroundStyle(Ink.primary)
-                + Text("  /  " + timecode(clock.duration, tenths: false)).foregroundStyle(Ink.tertiary))
-                .font(.system(size: 12.5, weight: .medium).monospacedDigit())
-                .lineLimit(1)
-                .fixedSize()
+            // A fixed slot with the transport drawn over it: the ticking timecode re-lays out only itself,
+            // never the toolbar next to it.
+            Color.clear
+                .frame(width: 190, height: 22)
+                .overlay(alignment: .leading) { Transport(clock: clock) { model.togglePlay() } }
 
             Spacer()
 
-            // The tools shrink to fit: everything, then the less common ones in a "More" menu, then the essentials.
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 4) { addTools; divider; editTools; editExtras; divider; viewTools }
+            // One fixed set of tools (the less common ones live in "More"); a narrow window gets the essentials.
+            // Picked from the width only when the window resizes — not re-measured on every redraw.
+            switch toolsSize {
+            case .full:
                 HStack(spacing: 4) { addTools; divider; editTools; divider; viewTools; moreMenu(extras: true, adds: false) }
-                HStack(spacing: 4) { addClipsTool; titleTool; divider; splitTool; deleteTool; divider; zoomTools; moreMenu(extras: true, adds: true) }
-                HStack(spacing: 4) { splitTool; zoomTools; moreMenu(extras: true, adds: true) }
+            case .medium:
+                HStack(spacing: 4) { addClipsTool; overlayTool; musicTool; titleTool; divider; splitTool; deleteTool; divider; zoomTools; moreMenu(extras: true, adds: true) }
+            case .compact:
+                HStack(spacing: 4) { addClipsTool; titleTool; divider; splitTool; deleteTool; moreMenu(extras: true, adds: true) }
             }
         }
+        .sheet(isPresented: $showSpeech) { SpeechSheet().environmentObject(model) }
+        .onGeometryChange(for: ToolsSize.self) { g in
+            g.size.width >= 670 ? .full : (g.size.width >= 560 ? .medium : .compact)
+        } action: { toolsSize = $0 }
         .buttonStyle(.borderless)
         .foregroundStyle(Ink.primary)
         .padding(.leading, gutter - 4)
@@ -241,11 +245,22 @@ struct TimelineView: View {
 
     @ViewBuilder private var addTools: some View {
         addClipsTool
+        overlayTool
+        StickerButton()
+            .disabled(!model.hasProject)
+        musicTool
+        RecordButton(recorder: model.recorder) { model.toggleVoiceover() }
+            .disabled(!model.hasProject)
+        titleTool
+    }
+
+    private var overlayTool: some View {
         tool("rectangle.on.rectangle", "Add overlay — B-roll or picture-in-picture (⇧⌘I)") { Panels.addOverlay(model) }
             .demoAnchor("tool-addOverlay")
             .disabled(!model.hasProject)
-        StickerButton()
-            .disabled(!model.hasProject)
+    }
+
+    private var musicTool: some View {
         Menu {
             Button("Add Music…") { Panels.addMusic(model) }
             Button("Add Sound Effects…") { Panels.addMusic(model, kind: .effect) }
@@ -261,11 +276,7 @@ struct TimelineView: View {
         .frame(width: 26, height: 22)
         .help("Add music (⌥⌘M) — hold for sound effects and text to speech")
         .demoAnchor("tool-music")
-        .sheet(isPresented: $showSpeech) { SpeechSheet().environmentObject(model) }
         .disabled(!model.hasProject)
-        RecordButton(recorder: model.recorder) { model.toggleVoiceover() }
-            .disabled(!model.hasProject)
-        titleTool
     }
 
     private var splitTool: some View {
@@ -289,21 +300,6 @@ struct TimelineView: View {
         .help(model.bladeMode ? "Blade tool on — click clips to cut them (B / Esc to stop)" : "Blade tool (B)")
         .disabled(!model.hasProject)
         deleteTool
-    }
-
-    /// Less common edit tools (moved into "More" when space is short).
-    @ViewBuilder private var editExtras: some View {
-        Button { model.editMode = model.editMode == .insert ? .overwrite : .insert } label: {
-            Image(systemName: model.editMode == .insert ? "arrow.right.to.line" : "square.on.square.intersection.dashed")
-                .font(.system(size: 13))
-                .foregroundStyle(model.editMode == .overwrite ? Color.yellow : Ink.secondary)
-                .frame(width: 26, height: 22)
-        }
-        .help(model.editMode == .insert ? "Insert: pasted and dropped clips push the rest along" : "Overwrite: pasted and dropped clips replace what's there")
-        tool("flag", "Add marker (M)") { model.addMarker() }
-            .disabled(!model.hasProject)
-        tool("plus.square.on.square", "Duplicate clip") { model.duplicateSelection() }
-            .disabled(model.selectedClip == nil)
     }
 
     @ViewBuilder private var zoomTools: some View {
@@ -336,12 +332,19 @@ struct TimelineView: View {
                 Button("Add Overlay…") { Panels.addOverlay(model) }
                 Button("Add Music…") { Panels.addMusic(model) }
                 Button("Add Sound Effects…") { Panels.addMusic(model, kind: .effect) }
+                Button("Text to Speech…") { showSpeech = true }
+                Menu("Add Sticker") {
+                    ForEach(EditorModel.stickerEmoji, id: \.self) { e in Button(e) { model.addSticker(e) } }
+                }
                 Button(model.recorder.isRecording ? "Stop Recording" : "Record Voiceover") { model.toggleVoiceover() }
                 Divider()
                 Button(model.bladeMode ? "Blade Tool Off" : "Blade Tool (B)") { model.bladeMode.toggle() }
                 Button(model.snapping ? "Turn Snapping Off (N)" : "Turn Snapping On (N)") { model.snapping.toggle() }
                 Button("Zoom to Fit (⇧Z)") { zoomToFit() }
                 Divider()
+            }
+            Picker("Preview Quality", selection: $model.previewQuality) {
+                ForEach(EditorModel.PreviewQuality.allCases) { Text($0.label).tag($0) }
             }
             if extras {
                 Picker("Paste and Drop", selection: $model.editMode) {
@@ -372,8 +375,8 @@ struct TimelineView: View {
     private var gutterIcons: some View {
         VStack(spacing: gap) {
             laneIcon("textformat", key: "titles", name: "titles", height: titleHeight)
-            laneIcon("captions.bubble", key: "captions", name: "captions", height: titleHeight)
-            laneIcon("sparkles", key: "effects", name: "effects", height: titleHeight)
+            if showCaptionsLane { laneIcon("captions.bubble", key: "captions", name: "captions", height: titleHeight) }
+            if showEffectsLane { laneIcon("sparkles", key: "effects", name: "effects", height: titleHeight) }
             ForEach((0..<overlayLanes).reversed(), id: \.self) { i in
                 laneIcon("rectangle.on.rectangle", key: Project.overlayLane(i), name: "overlay lane \(i + 1)", height: overlayHeight)
             }
@@ -444,10 +447,9 @@ struct TimelineView: View {
         let starts = model.project.starts
         let titleTop = rulerHeight + 6
         let captionTop = titleTop + titleHeight + gap
-        let effectTop = captionTop + titleHeight + gap
-        let overlayTop = effectTop + titleHeight + gap
+        let effectTop = captionTop + (showCaptionsLane ? titleHeight + gap : 0)
+        let overlayTop = effectTop + (showEffectsLane ? titleHeight + gap : 0)
         let laneTop = overlayTop + overlayLanesHeight + gap
-        let playheadX = CGFloat(clock.time) * pps
         return ZStack(alignment: .topLeading) {
             Ruler(duration: model.project.duration, pps: pps, height: rulerHeight)
                 .contentShape(Rectangle())
@@ -570,18 +572,12 @@ struct TimelineView: View {
                     .allowsHitTesting(false)
             }
 
-            // Playhead
-            Rectangle()
-                .fill(.white)
-                .frame(width: 1.5, height: titleTop + lanesHeight)
-                .shadow(color: .black.opacity(0.6), radius: 2)
-                .offset(x: playheadX - 0.75)
-                .allowsHitTesting(false)
-            PlayheadCap()
-                .fill(.white)
-                .frame(width: 12, height: 10)
-                .offset(x: playheadX - 6, y: rulerHeight - 10)
-                .allowsHitTesting(false)
+            // Playhead (its own view: it's the only part of the timeline that moves during playback).
+            Playhead(clock: clock, pps: pps, height: titleTop + lanesHeight, capY: rulerHeight - 10) { t in
+                // While playing, page along so the playhead stays in view.
+                let x = CGFloat(t) * pps
+                if x > scroll.x + viewport - 30 || x < scroll.x { scrollPosition.scrollTo(x: max(0, x - 30)) }
+            }
         }
         .coordinateSpace(name: "timeline")
         .pointerStyle(model.bladeMode ? .image(Image(systemName: "scissors"), hotSpot: .center) : nil)
@@ -1293,9 +1289,11 @@ struct TimelineView: View {
         return start
     }
 
-    /// HH:MM:SS:FF
+}
+
+enum Timecode {
     /// 0:12.4 (or 1:02:03.4 past an hour); totals without the tenth.
-    private func timecode(_ s: Double, tenths: Bool = true) -> String {
+    static func string(_ s: Double, tenths: Bool = true) -> String {
         guard s.isFinite, s >= 0 else { return "0:00" }
         let t = tenths ? (s * 10).rounded(.down) / 10 : s.rounded()
         let whole = Int(t)
@@ -1362,6 +1360,58 @@ private struct Ruler: View {
             }
         }
         .frame(height: height)
+    }
+}
+
+/// Scroll offset holder (a class, so writing it doesn't invalidate the view).
+final class ScrollBox { var x: CGFloat = 0 }
+
+/// Play / pause and the timecode; redraws with the clock, apart from the rest of the timeline.
+private struct Transport: View {
+    @ObservedObject var clock: PlaybackClock
+    let toggle: () -> Void
+    var body: some View {
+        HStack(spacing: 12) {
+            Button(action: toggle) {
+                Image(systemName: clock.playing ? "pause.fill" : "play.fill")
+                    .font(.system(size: 14))
+                    .frame(width: 20, height: 22)
+                    .contentShape(Rectangle())
+            }
+            .demoAnchor("play")
+            .help("Play / pause (Space) — ← / → step one frame")
+
+            (Text(Timecode.string(clock.time)).foregroundStyle(Ink.primary)
+                + Text("  /  " + Timecode.string(clock.duration, tenths: false)).foregroundStyle(Ink.tertiary))
+                .font(.system(size: 12.5, weight: .medium).monospacedDigit())
+                .lineLimit(1)
+                .fixedSize()
+        }
+    }
+}
+
+/// The white playhead line and cap. Follows the clock; asks the timeline to page along while playing.
+private struct Playhead: View {
+    @ObservedObject var clock: PlaybackClock
+    let pps: CGFloat
+    let height: CGFloat
+    let capY: CGFloat
+    let follow: (Double) -> Void
+    var body: some View {
+        let x = CGFloat(clock.time) * pps
+        ZStack(alignment: .topLeading) {
+            Rectangle()
+                .fill(.white)
+                .frame(width: 1.5, height: height)
+                .shadow(color: .black.opacity(0.6), radius: 2)
+                .offset(x: x - 0.75)
+            PlayheadCap()
+                .fill(.white)
+                .frame(width: 12, height: 10)
+                .offset(x: x - 6, y: capY)
+        }
+        .allowsHitTesting(false)
+        .onChange(of: clock.time) { _, t in if clock.playing { follow(t) } }
     }
 }
 

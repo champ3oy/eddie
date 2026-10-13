@@ -15,8 +15,8 @@ struct ViewerView: View {
                 if model.compare {
                     WipeOverlay(split: $model.split)
                 }
-                OverlayCanvas(clock: model.clock, size: fitted)
-                TitleCanvas(clock: model.clock, size: fitted)
+                OverlayCanvas(clock: model.clock.coarse, size: fitted)
+                TitleCanvas(clock: model.clock.coarse, size: fitted)
             }
             .frame(width: fitted.width, height: fitted.height)
             .demoAnchor("viewer")
@@ -25,8 +25,9 @@ struct ViewerView: View {
         }
         .overlay(alignment: .top) {
             VStack(spacing: 8) {
-                ExportBar()
-                RecordingBar(recorder: model.recorder, clock: model.clock)
+                ExportBar(activity: model.activity)
+                BackgroundWork(activity: model.activity)
+                RecordingBar(recorder: model.recorder, clock: model.clock.coarse)
             }
             .animation(.easeOut(duration: 0.2), value: model.exportProgress == nil)
         }
@@ -44,7 +45,7 @@ struct ViewerView: View {
 /// corner handles to resize, the top handle to rotate (snaps to straight angles), click to select.
 struct TitleCanvas: View {
     @EnvironmentObject var model: EditorModel
-    @ObservedObject var clock: PlaybackClock
+    @ObservedObject var clock: PlaybackClock.Ticker
     let size: CGSize
     @State private var origin: TitleItem?
     @State private var startDistance: CGFloat = 1
@@ -300,7 +301,7 @@ struct WipeOverlay: View {
 /// Edits the framing at the playhead, so animated (keyframed) overlays get a keyframe there.
 struct OverlayCanvas: View {
     @EnvironmentObject var model: EditorModel
-    @ObservedObject var clock: PlaybackClock
+    @ObservedObject var clock: PlaybackClock.Ticker
     let size: CGSize
     @State private var origin: Transform2D?
     @State private var startDistance: CGFloat = 1
@@ -495,7 +496,7 @@ struct PlayerLayerView: NSViewRepresentable {
 struct RecordingBar: View {
     @EnvironmentObject var model: EditorModel
     @ObservedObject var recorder: VoiceRecorder
-    @ObservedObject var clock: PlaybackClock
+    @ObservedObject var clock: PlaybackClock.Ticker
 
     var body: some View {
         if recorder.isRecording {
@@ -532,14 +533,15 @@ struct RecordingBar: View {
 /// While exporting: the file name, a progress bar with the percentage, and Cancel — at the top of the viewer.
 struct ExportBar: View {
     @EnvironmentObject var model: EditorModel
+    @ObservedObject var activity: Activity
 
     var body: some View {
-        if let p = model.exportProgress {
+        if let p = activity.exportProgress {
             HStack(spacing: 12) {
                 Image(systemName: "square.and.arrow.up").font(.system(size: 12, weight: .semibold))
                 VStack(alignment: .leading, spacing: 5) {
                     HStack {
-                        Text("Exporting \(model.exportingName ?? "video")")
+                        Text("Exporting \(activity.exportingName ?? "video")")
                             .font(.system(size: 12, weight: .semibold))
                             .lineLimit(1)
                             .truncationMode(.middle)
@@ -570,6 +572,35 @@ struct ExportBar: View {
             .glass(in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .padding(.top, 14)
             .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+}
+
+/// One small pill for work going on in the background (it slows things down a little meanwhile).
+struct BackgroundWork: View {
+    @EnvironmentObject var model: EditorModel
+    @ObservedObject var activity: Activity
+
+    private var label: String? {
+        var parts: [String] = []
+        if model.captioning { parts.append("Making captions") }
+        if let w = model.captionWork { parts.append(w.trimmingCharacters(in: CharacterSet(charactersIn: "…"))) }
+        if !model.audioJobs.isEmpty { parts.append("Processing audio") }
+        if activity.proxies > 0 { parts.append(activity.proxies == 1 ? "Preparing smooth playback" : "Preparing smooth playback (\(activity.proxies) videos)") }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ") + "…"
+    }
+
+    var body: some View {
+        if let label {
+            HStack(spacing: 7) {
+                ProgressView().controlSize(.mini)
+                Text(label).font(.system(size: 11.5, weight: .medium)).lineLimit(1)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .glass(in: Capsule())
+            .transition(.opacity)
+            .help("Eddie is working on this in the background; playback may be a little less smooth until it's done.")
         }
     }
 }

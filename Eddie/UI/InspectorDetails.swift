@@ -160,7 +160,7 @@ struct ClipDetails: View {
                 .help(framingOpen ? "Hide framing" : "Show zoom, position, rotation and crop")
             )) {
                 if framingOpen {
-                    FramingControls(clip: clip, clock: model.clock)
+                    FramingControls(clip: clip, clock: model.clock.coarse)
                 } else {
                     Button { withAnimation(.easeOut(duration: 0.18)) { framingOpen = true } } label: {
                         Text(clip.transform == .identity && clip.keyframes.isEmpty ? "As shot" : TimelineDescriber.framing(clip.transform))
@@ -180,7 +180,7 @@ struct ClipDetails: View {
 struct FramingControls: View {
     @EnvironmentObject var model: EditorModel
     let clip: ClipItem
-    @ObservedObject var clock: PlaybackClock
+    @ObservedObject var clock: PlaybackClock.Ticker
 
     private var t: Transform2D {
         let start = model.project.start(of: clip.id) ?? model.selectedOverlay?.start ?? 0

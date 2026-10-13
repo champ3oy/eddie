@@ -152,6 +152,9 @@ struct EddieApp: App {
                 Button("Compare Before / After") { model.compare.toggle() }
                     .keyboardShortcut("b", modifiers: [.command, .shift])
                     .disabled(!model.hasProject)
+                Picker("Preview Quality", selection: $model.previewQuality) {
+                    ForEach(EditorModel.PreviewQuality.allCases) { Text($0.label).tag($0) }
+                }
                 Divider()
                 Button("Zoom In") { NotificationCenter.default.post(name: .timelineZoom, object: CGFloat(1.5)) }
                     .keyboardShortcut("=")

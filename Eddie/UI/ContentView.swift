@@ -112,13 +112,7 @@ struct ContentView: View {
             Button { model.redo() } label: { Label("Redo", systemImage: "arrow.uturn.forward") }
                 .disabled(!model.canRedo)
                 .help("Redo (⇧⌘Z)")
-            Button { Panels.export(model) } label: {
-                if let p = model.exportProgress {
-                    Label("Exporting \(Int(p * 100))%", systemImage: "square.and.arrow.up")
-                } else {
-                    Label("Export", systemImage: "square.and.arrow.up")
-                }
-            }
+            Button { Panels.export(model) } label: { ExportLabel(activity: model.activity) }
             .disabled(!model.hasProject || model.exportProgress != nil)
             .help("Export the graded video (⌘E)")
             Button { showInspector.toggle() } label: { Label("Inspector", systemImage: "sidebar.right") }
@@ -164,6 +158,18 @@ struct EmptyStateView: View {
             Button("Open Video…") { Panels.open(model) }
                 .buttonStyle(.bordered)
                 .controlSize(.large)
+        }
+    }
+}
+
+/// The toolbar's Export button title; shows the percentage while exporting.
+private struct ExportLabel: View {
+    @ObservedObject var activity: Activity
+    var body: some View {
+        if let p = activity.exportProgress {
+            Label("Exporting \(Int(p * 100))%", systemImage: "square.and.arrow.up")
+        } else {
+            Label("Export", systemImage: "square.and.arrow.up")
         }
     }
 }

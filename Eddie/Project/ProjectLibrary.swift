@@ -78,19 +78,38 @@ final class ProjectLibrary: ObservableObject {
     }
 
     func read(_ id: UUID) throws -> Project {
-        try Self.decoder.decode(Project.self, from: Data(contentsOf: projectFile(id)))
+        // Waits for any autosave still being written, so this reads the latest.
+        let url = projectFile(id)
+        return try Self.decoder.decode(Project.self, from: Self.io.sync { try Data(contentsOf: url) })
     }
 
     func info(_ id: UUID) -> ProjectInfo? { projects.first { $0.id == id } }
 
     /// Saves the edit (and optionally a new thumbnail), updating the summary and modified date.
-    func save(_ project: Project, id: UUID, thumbnail: CGImage? = nil) throws {
+    /// `background`: encode and write off the main thread (autosave), in order with every other write.
+    func save(_ project: Project, id: UUID, thumbnail: CGImage? = nil, background: Bool = false) throws {
         var info = self.info(id) ?? ProjectInfo(id: id, name: uniqueName("Untitled Project"), created: Date(), modified: Date())
         info.modified = Date()
         info.duration = project.duration
         info.clipCount = project.clips.count
-        try write(project, info: info)
-        if let thumbnail { try writeThumbnail(thumbnail, id: id) }
+        if background {
+            let folder = folder(id), projectFile = projectFile(id), infoFile = infoFile(id), thumbURL = thumbnailURL(id)
+            nonisolated(unsafe) let thumb = thumbnail
+            Self.io.async {
+                do {
+                    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                    try Self.ioEncoder.encode(project).write(to: projectFile, options: .atomic)
+                    try Self.ioEncoder.encode(info).write(to: infoFile, options: .atomic)
+                    if let thumb { try Self.jpeg(thumb)?.write(to: thumbURL, options: .atomic) }
+                } catch {
+                    NSLog("Eddie: autosave failed: \(error.localizedDescription)")
+                }
+                if thumb != nil { DispatchQueue.main.async { MainActor.assumeIsolated { self.thumbnailVersion += 1 } } }
+            }
+        } else {
+            try write(project, info: info)
+            if let thumbnail { try writeThumbnail(thumbnail, id: id) }
+        }
         if let i = projects.firstIndex(where: { $0.id == id }) {
             projects[i] = info
             projects.sort { $0.modified > $1.modified }
@@ -100,8 +119,26 @@ final class ProjectLibrary: ObservableObject {
     }
 
     /// Replaces just the thumbnail (doesn't count as an edit).
-    func updateThumbnail(_ image: CGImage, id: UUID) throws {
-        try writeThumbnail(image, id: id)
+    func updateThumbnail(_ image: CGImage, id: UUID, background: Bool = false) throws {
+        guard background else { try writeThumbnail(image, id: id); return }
+        let url = thumbnailURL(id)
+        nonisolated(unsafe) let image = image
+        Self.io.async {
+            try? Self.jpeg(image)?.write(to: url, options: .atomic)
+            DispatchQueue.main.async { MainActor.assumeIsolated { self.thumbnailVersion += 1 } }
+        }
+    }
+
+    /// Project writes happen here, one at a time, so a background autosave never lands after a later save.
+    private nonisolated static let io = DispatchQueue(label: "eddie.library.io", qos: .utility)
+    private nonisolated static let ioEncoder: JSONEncoder = {
+        let e = JSONEncoder()
+        e.outputFormatting = [.prettyPrinted, .sortedKeys]
+        e.dateEncodingStrategy = .iso8601
+        return e
+    }()
+    nonisolated private static func jpeg(_ image: CGImage) -> Data? {
+        NSBitmapImageRep(cgImage: image).representation(using: .jpeg, properties: [.compressionFactor: 0.8])
     }
 
     func rename(_ id: UUID, to name: String) throws {
@@ -109,7 +146,8 @@ final class ProjectLibrary: ObservableObject {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         info.name = trimmed
-        try Self.encoder.encode(info).write(to: infoFile(id), options: .atomic)
+        let data = try Self.encoder.encode(info), url = infoFile(id)
+        try Self.io.sync { try data.write(to: url, options: .atomic) }
         reload()
     }
 
@@ -129,7 +167,8 @@ final class ProjectLibrary: ObservableObject {
 
     /// Moves the project folder to the Trash (recoverable). Never touches the videos it uses.
     func delete(_ id: UUID) throws {
-        try FileManager.default.trashItem(at: folder(id), resultingItemURL: nil)
+        let url = folder(id)
+        try Self.io.sync { try FileManager.default.trashItem(at: url, resultingItemURL: nil) }
         reload()
     }
 
@@ -155,15 +194,19 @@ final class ProjectLibrary: ObservableObject {
     // MARK: Private
 
     private func write(_ project: Project, info: ProjectInfo) throws {
-        try FileManager.default.createDirectory(at: folder(info.id), withIntermediateDirectories: true)
-        try Self.encoder.encode(project).write(to: projectFile(info.id), options: .atomic)
-        try Self.encoder.encode(info).write(to: infoFile(info.id), options: .atomic)
+        let folder = folder(info.id), projectFile = projectFile(info.id), infoFile = infoFile(info.id)
+        let projectData = try Self.encoder.encode(project), infoData = try Self.encoder.encode(info)
+        try Self.io.sync {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try projectData.write(to: projectFile, options: .atomic)
+            try infoData.write(to: infoFile, options: .atomic)
+        }
     }
 
     private func writeThumbnail(_ image: CGImage, id: UUID) throws {
-        let rep = NSBitmapImageRep(cgImage: image)
-        guard let data = rep.representation(using: .jpeg, properties: [.compressionFactor: 0.8]) else { return }
-        try data.write(to: thumbnailURL(id), options: .atomic)
+        guard let data = Self.jpeg(image) else { return }
+        let url = thumbnailURL(id)
+        try Self.io.sync { try data.write(to: url, options: .atomic) }
         thumbnailVersion += 1
     }
 

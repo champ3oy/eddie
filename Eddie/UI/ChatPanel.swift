@@ -22,13 +22,8 @@ struct ChatPanel: View {
                 }
                 .font(.system(size: 11.5))
             }
-            if model.busy, let status = model.status {
-                HStack(spacing: 6) {
-                    ProgressView().controlSize(.mini)
-                    Text(status).foregroundStyle(Ink.secondary).lineLimit(1)
-                    Spacer(minLength: 0)
-                }
-                .font(.system(size: 11.5))
+            if model.busy {
+                AIStatusLine(activity: model.activity)
             } else if let reply = model.assistantReply {
                 // Long answers scroll inside a short box instead of stretching the window.
                 HStack(alignment: .top, spacing: 6) {
@@ -225,5 +220,18 @@ struct Composer: View {
     private func primaryAction() {
         if model.busy { model.cancelAI(); return }
         if trimmed.isEmpty { model.autoGrade() } else { model.ask(trimmed); text = "" }
+    }
+}
+
+/// The AI's progress message while it works (watches only `activity`, so it doesn't redraw the panel).
+private struct AIStatusLine: View {
+    @ObservedObject var activity: Activity
+    var body: some View {
+        HStack(spacing: 6) {
+            ProgressView().controlSize(.mini)
+            Text(activity.status ?? "Working…").foregroundStyle(Ink.secondary).lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .font(.system(size: 11.5))
     }
 }
