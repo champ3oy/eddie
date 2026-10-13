@@ -48,7 +48,7 @@ enum Exporter {
         guard let session = AVAssetExportSession(asset: compiled.composition, presetName: settings.preset) else {
             throw ExportError.cannotCreateSession
         }
-        session.videoComposition = compiled.videoComposition
+        if settings.codec != .audio { session.videoComposition = compiled.videoComposition }
         session.audioMix = compiled.audioMix
         session.audioTimePitchAlgorithm = .spectral
         // The video defines the length; don't let audio padding run past it.

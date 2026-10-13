@@ -103,3 +103,25 @@ enum BlendMode: String, Codable, CaseIterable, Identifiable {
         }
     }
 }
+
+/// A point on a volume line: at `time` seconds into the item, its level is `level` (0…1, times its volume).
+struct VolumePoint: Codable, Equatable, Identifiable {
+    var id = UUID()
+    var time: Double
+    var level: Double
+}
+
+extension Array where Element == VolumePoint {
+    /// The level at a time: straight lines between points, flat before the first and after the last; 1 with no points.
+    func level(at t: Double) -> Double {
+        guard !isEmpty else { return 1 }
+        let pts = sorted { $0.time < $1.time }
+        if t <= pts[0].time { return pts[0].level }
+        if t >= pts[pts.count - 1].time { return pts[pts.count - 1].level }
+        for (a, b) in zip(pts, pts.dropFirst()) where t >= a.time && t <= b.time {
+            let f = b.time - a.time > 1e-6 ? (t - a.time) / (b.time - a.time) : 1
+            return a.level + (b.level - a.level) * f
+        }
+        return pts[pts.count - 1].level
+    }
+}

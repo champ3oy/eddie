@@ -93,6 +93,8 @@ struct ClipItem: Identifiable, Codable, Equatable {
     var effects: [ClipEffect] = []
     var mask: ClipMask? = nil
     var chromaKey: ChromaKey? = nil
+    /// Volume over time (seconds into the clip); empty = steady.
+    var volumePoints: [VolumePoint] = []
     var reversed = false
 
     static let speeds: [Double] = [0.25, 0.5, 1, 1.5, 2, 4]
@@ -145,6 +147,7 @@ extension ClipItem {
         effects = try c.decodeIfPresent([ClipEffect].self, forKey: .effects) ?? []
         mask = try c.decodeIfPresent(ClipMask.self, forKey: .mask)
         chromaKey = try c.decodeIfPresent(ChromaKey.self, forKey: .chromaKey)
+        volumePoints = try c.decodeIfPresent([VolumePoint].self, forKey: .volumePoints) ?? []
     }
 }
 
@@ -200,6 +203,8 @@ struct MusicItem: Identifiable, Codable, Equatable {
     var processed: URL?
     /// Beat times in the source file, in seconds (for snapping).
     var beats: [Double] = []
+    /// Volume over time (seconds into the item on the timeline); empty = steady.
+    var volumePoints: [VolumePoint] = []
 
     var name: String { url.lastPathComponent }
     var playURL: URL { processed ?? url }
@@ -222,6 +227,7 @@ extension MusicItem {
         lane = try c.decodeIfPresent(Int.self, forKey: .lane) ?? 0
         processed = try c.decodeIfPresent(URL.self, forKey: .processed)
         beats = try c.decodeIfPresent([Double].self, forKey: .beats) ?? []
+        volumePoints = try c.decodeIfPresent([VolumePoint].self, forKey: .volumePoints) ?? []
     }
 }
 

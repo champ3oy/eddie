@@ -267,9 +267,11 @@ enum ProjectCompiler {
                 if inO > 0 { g *= min(1, max(0, (t - s) / inO)) }
                 if outO > 0 { g *= min(1, max(0, (e - t) / outO)) }
                 g *= 1 - (1 - Project.duckLevel) * presence(duck, at: t)
+                g *= clip.volumePoints.level(at: t - s)
                 return g * endFade(t)
             }
             let keys = [s + clip.audioFadeIn, e - clip.audioFadeOut, s + inO, e - outO] + duckKeys + fadeKeys
+                + clip.volumePoints.map { s + $0.time }
             curve(mainParams[i % 2], from: s, to: e, keys: keys, gain: gain)
         }
         mixParams += mainParams.filter { !removed.contains($0.trackID) }
@@ -293,9 +295,10 @@ enum ProjectCompiler {
                 if fi > 0.01 { g *= min(1, max(0, (t - s) / fi)) }
                 if fo > 0.01 { g *= min(1, max(0, (e - t) / fo)) }
                 g *= 1 - 0.65 * presence(underVoice, at: t)
+                g *= item.volumePoints.level(at: t - s)
                 return g * endFade(t)
             }
-            var keys = [s + fi, e - fo] + fadeKeys
+            var keys = [s + fi, e - fo] + fadeKeys + item.volumePoints.map { s + $0.time }
             for v in underVoice { keys += [v.start - 0.15, v.start + 0.15, v.end - 0.15, v.end + 0.15] }
             p.setVolume(Float(gain(s)), at: .zero)
             curve(p, from: s, to: e, keys: keys, gain: gain)

@@ -330,10 +330,11 @@ final class EditorModel: ObservableObject {
         func clipKey(_ c: ClipItem) -> String {
             "\(c.id)|\(c.url.path)|\(c.sourceStart)|\(c.sourceEnd)|\(c.speed)|\(c.audioMuted)|\(c.volume)|\(c.isPhoto)|"
                 + "\(String(describing: c.transitionIn))|\(c.audioFadeIn)|\(c.audioFadeOut)|\(String(describing: c.audioOverride))|\(c.reversed)|\(String(describing: c.reversedURL))"
+                + "|\(c.volumePoints.map { "\($0.time):\($0.level)" })"
         }
         return "\(p.duckUnderMusic)|\(p.fadeOut)|\(p.format.aspect)|\(p.mutedLanes.sorted())#" + p.clips.map(clipKey).joined(separator: ";")
             + "#" + p.overlays.map { "\(clipKey($0.clip))@\($0.start)L\($0.lane)" }.joined(separator: ";")
-            + "#" + p.music.map { "\($0.id)|\($0.playURL.path)|\($0.start)|\($0.sourceStart)|\($0.sourceEnd)|\($0.volume)|\($0.fadeIn)|\($0.fadeOut)|\($0.kind)" }.joined(separator: ";")
+            + "#" + p.music.map { "\($0.id)|\($0.playURL.path)|\($0.start)|\($0.sourceStart)|\($0.sourceEnd)|\($0.volume)|\($0.fadeIn)|\($0.fadeOut)|\($0.kind)|\($0.volumePoints.map { "\($0.time):\($0.level)" })" }.joined(separator: ";")
     }
 
     // MARK: - Opening, adding
@@ -1421,6 +1422,93 @@ final class EditorModel: ObservableObject {
                 alert = "Couldn't start recording: \(error.localizedDescription)"
             }
         }
+    }
+
+    // MARK: Audio tools
+
+    /// Moves a clip's own sound onto an audio lane (the clip goes silent), so it can be moved, trimmed and faded separately.
+    func extractAudio(_ id: UUID? = nil) {
+        guard let id = id ?? selection, let i = project.index(of: id) else { return }
+        let clip = project.clips[i]
+        guard !clip.isPhoto, !clip.reversed else { alert = "Photos and reversed clips have no sound to extract."; return }
+        guard abs(clip.speed - 1) < 0.001 else { alert = "Set the clip back to 1× before extracting its sound."; return }
+        let start = project.starts[i]
+        Task {
+            do {
+                let url = clip.audioOverride ?? clip.url
+                _ = try await loadMusic(url)
+                var item = MusicItem(url: url, start: start, sourceStart: clip.sourceStart, sourceEnd: clip.sourceEnd)
+                item.kind = .effect
+                item.volume = clip.audioMuted ? 0 : clip.volume
+                item.fadeIn = clip.audioFadeIn
+                item.fadeOut = clip.audioFadeOut
+                item.volumePoints = clip.volumePoints
+                var lane = 0
+                while project.music.contains(where: { $0.lane == lane && $0.start < item.end && $0.end > start }) { lane += 1 }
+                item.lane = lane
+                mutate(.push) { p in
+                    p.music.append(item)
+                    p.updateClip(id) { $0.audioMuted = true }
+                }
+                selection = item.id
+                append(.info, "Moved the sound of \(clip.name) onto its own lane.")
+            } catch {
+                alert = "Couldn't extract the sound: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    /// Text to speech: a voiceover of `text` at the playhead, in a Mac voice.
+    func addSpeech(_ text: String, voice: String?, rate: Double = 1, pitch: Double = 1, at time: Double? = nil) {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty, hasProject else { return }
+        runAudioJob(UUID(), "Speaking") { [self] in
+            let url = try await SpeechMaker.speak(t, voice: voice, rate: rate, pitch: pitch)
+            addMusic(url, at: time ?? clock.time, kind: .voiceover)
+        }
+    }
+
+    /// A voice effect on a song/voiceover/effect or on a clip's own sound (rendered to a new file; undo restores it).
+    func applyVoiceEffect(_ effect: AudioProcessor.VoiceEffect?, to id: UUID) {
+        if let m = project.music.first(where: { $0.id == id }) {
+            guard let effect else { resetAudio(id); return }
+            runAudioJob(id, "Applying \(effect.label)") { [self] in
+                let out = try await AudioProcessor.process(m.url, options: .init(voice: effect))
+                _ = try await loadMusic(out)
+                updateMusic(id, undo: .push) { $0.processed = out }
+            }
+        } else if let c = project.clip(id), !c.isPhoto {
+            guard let effect else { resetAudio(id); return }
+            runAudioJob(id, "Applying \(effect.label)") { [self] in
+                let out = try await AudioProcessor.process(c.url, options: .init(voice: effect))
+                _ = try await loadMusic(out)
+                updateClip(id, undo: .push) { $0.audioOverride = out }
+            }
+        }
+    }
+
+    /// Adds a point to a song's or clip's volume line (`time` in seconds into the item).
+    func addVolumePoint(_ id: UUID, time: Double, level: Double) {
+        let p = VolumePoint(time: max(0, time), level: min(max(level, 0), 1))
+        if project.music.contains(where: { $0.id == id }) {
+            updateMusic(id, undo: .push) { $0.volumePoints.append(p); $0.volumePoints.sort { $0.time < $1.time } }
+        } else {
+            updateClip(id, undo: .push) { $0.volumePoints.append(p); $0.volumePoints.sort { $0.time < $1.time } }
+        }
+    }
+
+    func moveVolumePoint(_ id: UUID, point: UUID, time: Double, level: Double, undo: UndoMode = .none) {
+        func edit(_ pts: inout [VolumePoint]) {
+            if let i = pts.firstIndex(where: { $0.id == point }) { pts[i].time = max(0, time); pts[i].level = min(max(level, 0), 1) }
+            pts.sort { $0.time < $1.time }
+        }
+        if project.music.contains(where: { $0.id == id }) { updateMusic(id, undo: undo) { edit(&$0.volumePoints) } }
+        else { updateClip(id, undo: undo) { edit(&$0.volumePoints) } }
+    }
+
+    func removeVolumePoint(_ id: UUID, point: UUID) {
+        if project.music.contains(where: { $0.id == id }) { updateMusic(id, undo: .push) { $0.volumePoints.removeAll { $0.id == point } } }
+        else { updateClip(id, undo: .push) { $0.volumePoints.removeAll { $0.id == point } } }
     }
 
     // MARK: Stickers, effects, lanes

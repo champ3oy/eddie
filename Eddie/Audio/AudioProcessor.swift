@@ -8,6 +8,54 @@ enum AudioProcessor {
         var normalize = false
         /// Remove background noise with Apple's voice isolation.
         var reduceNoise = false
+        /// A fun voice (robot, deep, chipmunk…).
+        var voice: VoiceEffect? = nil
+    }
+
+    enum VoiceEffect: String, Codable, CaseIterable, Identifiable {
+        case robot, deep, chipmunk, echo, radio, alien, cathedral
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .robot: return "Robot"
+            case .deep: return "Deep"
+            case .chipmunk: return "Chipmunk"
+            case .echo: return "Echo"
+            case .radio: return "Old radio"
+            case .alien: return "Alien"
+            case .cathedral: return "Cathedral"
+            }
+        }
+
+        /// The audio units that make the effect, in order.
+        func nodes() -> [AVAudioNode] {
+            func distortion(_ preset: AVAudioUnitDistortionPreset, _ wet: Float) -> AVAudioUnitDistortion {
+                let d = AVAudioUnitDistortion()
+                d.loadFactoryPreset(preset)
+                d.wetDryMix = wet
+                return d
+            }
+            func pitch(_ cents: Float) -> AVAudioUnitTimePitch {
+                let p = AVAudioUnitTimePitch()
+                p.pitch = cents
+                return p
+            }
+            switch self {
+            case .robot: return [pitch(-200), distortion(.speechGoldenPi, 70)]
+            case .deep: return [pitch(-500)]
+            case .chipmunk: return [pitch(700)]
+            case .echo:
+                let d = AVAudioUnitDelay()
+                d.delayTime = 0.22; d.feedback = 45; d.wetDryMix = 35
+                return [d]
+            case .radio: return [distortion(.speechRadioTower, 75)]
+            case .alien: return [pitch(300), distortion(.speechAlienChatter, 70)]
+            case .cathedral:
+                let r = AVAudioUnitReverb()
+                r.loadFactoryPreset(.cathedral); r.wetDryMix = 45
+                return [r]
+            }
+        }
     }
 
     /// Where Eddie keeps files it makes (processed audio, reversed clips, proxies).
@@ -29,6 +77,7 @@ enum AudioProcessor {
     static func process(_ input: URL, options: Options) async throws -> URL {
         var buffer = try await decode(input)
         if options.reduceNoise { buffer = try isolateVoice(buffer) }
+        if let voice = options.voice { buffer = try render(buffer, through: voice.nodes()) }
         if options.normalize { normalize(buffer) }
         let out = mediaFolder.appendingPathComponent("\(UUID().uuidString).m4a")
         try write(buffer, to: out)
@@ -147,13 +196,21 @@ enum AudioProcessor {
         guard AVAudioUnitComponentManager.shared().components(matching: desc).first != nil else {
             throw CocoaError(.featureUnsupported, userInfo: [NSLocalizedDescriptionKey: "Noise reduction isn't available on this Mac."])
         }
+        return try render(input, through: [AVAudioUnitEffect(audioComponentDescription: desc)])
+    }
+
+    /// Runs the sound through a chain of audio units, offline (same length out as in).
+    static func render(_ input: AVAudioPCMBuffer, through units: [AVAudioNode]) throws -> AVAudioPCMBuffer {
         let engine = AVAudioEngine()
         let player = AVAudioPlayerNode()
-        let unit = AVAudioUnitEffect(audioComponentDescription: desc)
         engine.attach(player)
-        engine.attach(unit)
-        engine.connect(player, to: unit, format: input.format)
-        engine.connect(unit, to: engine.mainMixerNode, format: input.format)
+        var last: AVAudioNode = player
+        for unit in units {
+            engine.attach(unit)
+            engine.connect(last, to: unit, format: input.format)
+            last = unit
+        }
+        engine.connect(last, to: engine.mainMixerNode, format: input.format)
         try engine.enableManualRenderingMode(.offline, format: input.format, maximumFrameCount: 4096)
         try engine.start()
         player.scheduleBuffer(input, completionHandler: nil)

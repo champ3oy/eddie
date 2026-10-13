@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 
 /// Editing timeline: header (transport, tools), a ruler, then lanes — AI grade, video, clip sound, music —
@@ -37,6 +38,8 @@ struct TimelineView: View {
     /// Which block the pointer is over (its fade handles show), and the fade being dragged.
     @State private var hoverKey: String?
     @State private var fadeOrigin: (key: String, value: Double)?
+    @State private var volumeOrigin: (point: UUID, time: Double, level: Double)?
+    @State private var showSpeech = false
     @GestureState private var fadeDragActive = false
 
     private let gutter: CGFloat = 40
@@ -245,6 +248,7 @@ struct TimelineView: View {
         Menu {
             Button("Add Music…") { Panels.addMusic(model) }
             Button("Add Sound Effects…") { Panels.addMusic(model, kind: .effect) }
+            Button("Text to Speech…") { showSpeech = true }
         } label: {
             Image(systemName: "music.note").font(.system(size: 13))
         } primaryAction: {
@@ -254,8 +258,9 @@ struct TimelineView: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .frame(width: 26, height: 22)
-        .help("Add music (⌥⌘M) — hold for sound effects")
+        .help("Add music (⌥⌘M) — hold for sound effects and text to speech")
         .demoAnchor("tool-music")
+        .sheet(isPresented: $showSpeech) { SpeechSheet().environmentObject(model) }
         .disabled(!model.hasProject)
         RecordButton(recorder: model.recorder) { model.toggleVoiceover() }
             .disabled(!model.hasProject)
@@ -515,6 +520,13 @@ struct TimelineView: View {
                 let w = max(1, CGFloat(clip.duration) * pps - 2)
                 ClipSound(clip: clip, peaks: soundPeaks(clip))
                     .frame(width: w, height: audioHeight)
+                    .simultaneousGesture(addVolumePointGesture(clip.id, height: audioHeight, pps: pps))
+                    .overlay {
+                        if !clip.isPhoto && !clip.audioMuted {
+                            volumeLine(clip.id, points: clip.volumePoints, width: w, height: audioHeight, pps: pps,
+                                       active: model.selection == clip.id || hoverKey == "sound-\(clip.id)")
+                        }
+                    }
                     .overlay {
                         if !clip.isPhoto {
                             fadeLines(key: "sound-\(clip.id)", width: w, height: audioHeight, pps: pps,
@@ -737,6 +749,8 @@ struct TimelineView: View {
                     .disabled(clip.reversed)
                 if clip.audioOverride != nil && !clip.reversed { Button("Use Original Sound") { model.resetAudio(clip.id) } }
             }
+            Button("Extract Audio to Its Own Lane") { model.extractAudio(clip.id) }
+            voiceEffectMenu(clip.id, active: clip.audioOverride != nil && !clip.reversed)
             Button("Freeze Frame at Playhead") { model.freezeFrame() }
             Button(clip.reversed ? "Play Forwards" : "Reverse") { model.toggleReverse(clip.id) }
         }
@@ -824,6 +838,74 @@ struct TimelineView: View {
                     set(min(max(0, (d * 10).rounded() / 10), limit))   // tenths of a second
                 }
                 .onEnded { _ in fadeOrigin = nil; model.endInteraction() })
+    }
+
+    // MARK: Volume lines
+
+    @ViewBuilder
+    private func voiceEffectMenu(_ id: UUID, active: Bool) -> some View {
+        Menu("Voice Effect") {
+            ForEach(AudioProcessor.VoiceEffect.allCases) { e in
+                Button(e.label) { model.applyVoiceEffect(e, to: id) }
+            }
+            if active {
+                Divider()
+                Button("No Effect (Original Sound)") { model.applyVoiceEffect(nil, to: id) }
+            }
+        }
+    }
+
+    /// The volume over time: a line with draggable points. Double-click the block to add a point there.
+    @ViewBuilder
+    private func volumeLine(_ id: UUID, points: [VolumePoint], width: CGFloat, height: CGFloat, pps: CGFloat, active: Bool) -> some View {
+        let top: CGFloat = 4, bottom = height - 4
+        let y = { (level: Double) in bottom - (bottom - top) * CGFloat(level) }
+        if active || !points.isEmpty {
+            ZStack(alignment: .topLeading) {
+                Canvas { ctx, size in
+                    var path = Path()
+                    let pts = points.sorted { $0.time < $1.time }
+                    let level0 = pts.first?.level ?? 1
+                    path.move(to: CGPoint(x: 0, y: y(level0)))
+                    for p in pts { path.addLine(to: CGPoint(x: CGFloat(p.time) * pps, y: y(p.level))) }
+                    path.addLine(to: CGPoint(x: size.width, y: y(pts.last?.level ?? 1)))
+                    ctx.stroke(path, with: .color(.white.opacity(active ? 0.85 : 0.5)),
+                               style: StrokeStyle(lineWidth: 1.2, dash: points.isEmpty ? [3, 3] : []))
+                }
+                .allowsHitTesting(false)
+                ForEach(points) { p in
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 7, height: 7)
+                        .padding(4)
+                        .contentShape(Circle())
+                        .position(x: CGFloat(p.time) * pps, y: y(p.level))
+                        .pointerStyle(.grabIdle)
+                        .highPriorityGesture(DragGesture(minimumDistance: 0, coordinateSpace: .named("timeline"))
+                            .updating($fadeDragActive) { _, active, _ in active = true }
+                            .onChanged { v in
+                                if volumeOrigin?.point != p.id { volumeOrigin = (p.id, p.time, p.level); model.beginInteraction() }
+                                guard let o = volumeOrigin else { return }
+                                let t = o.time + Double(v.translation.width / pps)
+                                let l = o.level - Double(v.translation.height / (bottom - top))
+                                model.moveVolumePoint(id, point: p.id, time: t, level: l)
+                            }
+                            .onEnded { _ in volumeOrigin = nil; model.endInteraction() })
+                        .contextMenu { Button("Remove Point") { model.removeVolumePoint(id, point: p.id) } }
+                        .help("\(Int((p.level * 100).rounded()))% — drag to change, right-click to remove")
+                }
+            }
+            .frame(width: width, height: height)
+        }
+    }
+
+    /// Double-clicking an audio block adds a volume point where you clicked.
+    private func addVolumePointGesture(_ id: UUID, height: CGFloat, pps: CGFloat) -> some Gesture {
+        SpatialTapGesture(count: 2).onEnded { v in
+            let top: CGFloat = 4, bottom = height - 4
+            let level = Double((bottom - min(max(v.location.y, top), bottom)) / (bottom - top))
+            model.addVolumePoint(id, time: Double(v.location.x / pps), level: level)
+        }
     }
 
     // MARK: Transitions
@@ -947,12 +1029,15 @@ struct TimelineView: View {
                     musicTrimHandle(item, leading: false, pps: pps)
                 }
             }
+            volumeLine(item.id, points: item.volumePoints, width: max(8, CGFloat(item.duration) * pps), height: musicHeight,
+                       pps: pps, active: selected || hoverKey == "music-\(item.id)")
             fadeLines(key: "music-\(item.id)", width: max(8, CGFloat(item.duration) * pps), height: musicHeight, pps: pps,
                       fadeIn: item.fadeIn, fadeOut: item.fadeOut, limit: min(10, item.duration / 2), hint: "sound",
                       setIn: { v in model.updateMusic(item.id, undo: .none) { $0.fadeIn = v } },
                       setOut: { v in model.updateMusic(item.id, undo: .none) { $0.fadeOut = v } })
         }
         .frame(width: max(8, CGFloat(item.duration) * pps), height: musicHeight)
+        .simultaneousGesture(addVolumePointGesture(item.id, height: musicHeight, pps: pps))
         .demoAnchor("music-\(item.id)")
         .onHover { hoverKey = $0 ? "music-\(item.id)" : (hoverKey == "music-\(item.id)" ? nil : hoverKey) }
         .clipShape(RoundedRectangle(cornerRadius: TrackColor.radius, style: .continuous))
@@ -979,6 +1064,7 @@ struct TimelineView: View {
             }
             Button("Normalize Loudness") { model.normalize(item.id) }
             Button("Reduce Noise") { model.reduceNoise(musicID: item.id) }
+            voiceEffectMenu(item.id, active: item.processed != nil)
             if item.processed != nil { Button("Use Original Sound") { model.resetAudio(item.id) } }
             Button(item.beats.isEmpty ? "Find the Beat (snap to it)" : "Find the Beat Again") { model.detectBeats(item.id) }
             Divider()
@@ -1398,5 +1484,64 @@ struct StickerButton: View {
             }
             .padding(10)
         }
+    }
+}
+
+/// Text to speech: type, pick a voice, preview, then add it as a voiceover at the playhead.
+struct SpeechSheet: View {
+    @EnvironmentObject var model: EditorModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var text = ""
+    @AppStorage("speechVoice") private var voice = ""
+    @State private var rate = 1.0
+    @State private var pitch = 1.0
+    @State private var previewer = AVSpeechSynthesizer()
+    private let voices = SpeechMaker.voices()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Text to speech").font(.system(size: 15, weight: .semibold))
+            TextEditor(text: $text)
+                .font(.system(size: 13))
+                .scrollContentBackground(.hidden)
+                .padding(8)
+                .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.06)))
+                .frame(minHeight: 120)
+            Picker("Voice", selection: $voice) {
+                Text("Default").tag("")
+                ForEach(voices) { v in Text("\(v.name) — \(v.language)").tag(v.id) }
+            }
+            HStack(spacing: 8) {
+                PillSlider(label: "Speed", value: String(format: "%.1f×", rate), amount: $rate, range: 0.5...1.5, reset: 1)
+                PillSlider(label: "Pitch", value: String(format: "%.1f", pitch), amount: $pitch, range: 0.5...2, reset: 1)
+            }
+            Text("More voices: System Settings → Accessibility → Spoken Content → System Voice → Manage Voices.")
+                .font(.system(size: 11)).foregroundStyle(Ink.tertiary)
+            HStack {
+                Button("Preview") {
+                    previewer.stopSpeaking(at: .immediate)
+                    let u = AVSpeechUtterance(string: text)
+                    if let v = AVSpeechSynthesisVoice(identifier: voice) { u.voice = v }
+                    u.rate = Float(Double(AVSpeechUtteranceDefaultSpeechRate) * rate)
+                    u.pitchMultiplier = Float(pitch)
+                    previewer.speak(u)
+                }
+                .disabled(text.trimmingCharacters(in: .whitespaces).isEmpty)
+                Spacer()
+                Button("Cancel") { previewer.stopSpeaking(at: .immediate); dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Add at Playhead") {
+                    previewer.stopSpeaking(at: .immediate)
+                    model.addSpeech(text, voice: voice.isEmpty ? nil : voice, rate: rate, pitch: pitch)
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .tint(Color(white: 0.32))
+                .disabled(text.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(22)
+        .frame(width: 460)
+        .background(Color.black)
+        .preferredColorScheme(.dark)
     }
 }
