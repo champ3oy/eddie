@@ -6,6 +6,30 @@ struct ContentView: View {
     @State private var dropTargeted = false
     @AppStorage("showMediaBin") private var showMedia = false
     @AppStorage("showCaptions") private var showCaptions = false
+    /// The timeline's height limit chosen by dragging the handle above it (0 = automatic).
+    @AppStorage("timelineHeight") private var timelineHeight = 0.0
+    @State private var timelineShown: CGFloat = 0
+    @State private var resizeStart: CGFloat?
+
+    /// The line between the video and the timeline: drag it to give the timeline more or less room.
+    /// Double-click goes back to automatic.
+    private func resizeHandle(ceiling: CGFloat) -> some View {
+        Rectangle()
+            .fill(Color.white.opacity(0.1))
+            .frame(height: 1)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 3)
+            .contentShape(Rectangle())
+            .pointerStyle(.rowResize)
+            .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                .onChanged { v in
+                    if resizeStart == nil { resizeStart = timelineShown }
+                    timelineHeight = Double(min(max(160, (resizeStart ?? timelineShown) - v.translation.height), ceiling))
+                }
+                .onEnded { _ in resizeStart = nil })
+            .onTapGesture(count: 2) { timelineHeight = 0 }
+            .help("Drag to resize the timeline · double-click for automatic")
+    }
 
     var body: some View {
         Group {
@@ -23,10 +47,16 @@ struct ContentView: View {
                         Divider()
                     }
                     // The editor takes whatever width is left (it never pushes the panels off screen).
-                    VStack(spacing: 0) {
-                        ViewerView()
-                        Divider()
-                        TimelineView(clock: model.clock)
+                    GeometryReader { geo in
+                        // Automatically up to 45% of the height; dragged, whatever you chose (the video keeps at least 180 pt).
+                        let ceiling = max(160, geo.size.height - 180)
+                        let limit = timelineHeight > 0 ? min(max(timelineHeight, 160), ceiling) : min(ceiling, geo.size.height * 0.45)
+                        VStack(spacing: 0) {
+                            ViewerView()
+                            resizeHandle(ceiling: ceiling)
+                            TimelineView(clock: model.clock, maxHeight: limit)
+                                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { timelineShown = $0 }
+                        }
                     }
                     .frame(minWidth: 0, maxWidth: .infinity)
                 }

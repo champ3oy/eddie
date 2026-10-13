@@ -7,6 +7,8 @@ struct TimelineView: View {
     @EnvironmentObject var model: EditorModel
     /// Not observed: only `Playhead` and `Transport` redraw as the playhead moves, not every lane.
     let clock: PlaybackClock
+    /// The most height the timeline may take (header included). Lanes that don't fit scroll up and down.
+    var maxHeight: CGFloat = .infinity
     /// Timeline scale in points per second. Set once (fit to the edit) and then only changed by zooming —
     /// trimming or adding clips doesn't rescale the timeline. nil until there's something to fit.
     private var pps: CGFloat? {
@@ -73,9 +75,18 @@ struct TimelineView: View {
             + gap * (5 + optionalLanes)
     }
 
+    /// Header row plus the padding around the timeline.
+    static let chromeHeight: CGFloat = 22 + 8 + 8 + 10
+    /// Everything the lanes need, to be shown without scrolling.
+    var naturalHeight: CGFloat { Self.chromeHeight + rulerHeight + 6 + lanesHeight + 6 }
+
     var body: some View {
+        let full = rulerHeight + 6 + lanesHeight + 6
+        let visible = max(min(full, 110), min(full, maxHeight - Self.chromeHeight))
         VStack(spacing: 8) {
             header
+            // Lanes scroll vertically when there are more than fit; the video never gets squeezed.
+            ScrollView(.vertical) {
             HStack(alignment: .top, spacing: 0) {
                 gutterIcons.padding(.top, rulerHeight + 6)
                 GeometryReader { geo in
@@ -97,8 +108,13 @@ struct TimelineView: View {
                     .onAppear { viewport = geo.size.width; fitIfNeeded() }
                     .onChange(of: geo.size.width) { _, w in viewport = w; fitIfNeeded() }
                 }
-                .frame(height: rulerHeight + 6 + lanesHeight + 6)
+                .frame(height: full)
             }
+            }
+            .defaultScrollAnchor(.top)
+            .scrollDisabled(full <= visible + 0.5)
+            .scrollIndicators(full > visible + 0.5 ? .automatic : .hidden)
+            .frame(height: visible)
         }
         .padding(.horizontal, 12)
         .padding(.top, 8)
