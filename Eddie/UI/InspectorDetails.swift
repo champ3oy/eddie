@@ -142,6 +142,7 @@ struct ClipDetails: View {
                 }
             }
 
+            SmartToolsCard(clip: clip, isOverlay: overlay != nil)
             EffectsCard(clip: clip)
             MaskCard(clip: clip)
             ChromaKeyCard(clip: clip)
@@ -397,6 +398,43 @@ struct ChromaKeyCard: View {
                     .font(.system(size: 11)).foregroundStyle(Ink.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+}
+
+/// AI helpers that work on the picture: follow the subject, steady the shot, speed ramps, cut people out, track.
+struct SmartToolsCard: View {
+    @EnvironmentObject var model: EditorModel
+    let clip: ClipItem
+    let isOverlay: Bool
+
+    var body: some View {
+        let working = model.audioJobs.contains(clip.id)
+        GlassCard(title: "Smart tools", trailing: working ? AnyView(ProgressView().controlSize(.mini)) : nil) {
+            if !clip.isPhoto {
+                HStack(spacing: 6) {
+                    GlassPillButton(title: "Stabilize", icon: "hand.raised.slash") { model.stabilize(clip.id) }
+                        .help("Steady shaky footage (zooms in a little to hide the edges)")
+                    if !isOverlay {
+                        GlassPillButton(title: "Reframe", icon: "person.crop.rectangle") { model.autoReframe(clip.id) }
+                            .help("Follow the subject when the clip is cropped to the video's shape (e.g. vertical 9:16)")
+                    }
+                }
+                if !isOverlay {
+                    PillMenu(label: "Speed ramp", value: "Choose") {
+                        ForEach(SpeedRamp.allCases) { r in Button(r.label) { model.speedRamp(r, for: clip.id) } }
+                    }
+                }
+            }
+            if isOverlay {
+                GlassPillButton(title: "Track motion", icon: "scope") { model.trackOverlay(clip.id) }
+                    .help("Place the overlay over something in the video, then track: it follows that thing from the playhead on")
+            }
+            Toggle(isOn: Binding(get: { clip.removeBackground }, set: { v in model.updateClip(clip.id, undo: .push) { $0.removeBackground = v } })) {
+                Text("Cut out people (remove background)").font(.system(size: 11.5)).foregroundStyle(Ink.primary)
+            }
+            .toggleStyle(.switch).controlSize(.mini)
+            .help("Keeps only the people in the picture — great on an overlay above other footage")
         }
     }
 }

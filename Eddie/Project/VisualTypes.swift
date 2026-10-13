@@ -125,3 +125,30 @@ extension Array where Element == VolumePoint {
         return pts[pts.count - 1].level
     }
 }
+
+/// Ready-made speed changes within a clip: the clip is cut into pieces that play at different speeds.
+enum SpeedRamp: String, CaseIterable, Identifiable {
+    case hero, bullet, montage, flashIn, flashOut, slowEnd
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .hero: return "Hero (slow in the middle)"
+        case .bullet: return "Bullet time"
+        case .montage: return "Montage (fast–slow–fast)"
+        case .flashIn: return "Flash in"
+        case .flashOut: return "Flash out"
+        case .slowEnd: return "Slow ending"
+        }
+    }
+    /// Pieces as (fraction of the clip's source, speed).
+    var pieces: [(fraction: Double, speed: Double)] {
+        switch self {
+        case .hero: return [(0.35, 1), (0.3, 0.35), (0.35, 1)]
+        case .bullet: return [(0.25, 1.5), (0.5, 0.25), (0.25, 1.5)]
+        case .montage: return [(0.2, 2.5), (0.2, 0.75), (0.2, 2.5), (0.2, 0.75), (0.2, 2.5)]
+        case .flashIn: return [(0.4, 4), (0.6, 1)]
+        case .flashOut: return [(0.6, 1), (0.4, 4)]
+        case .slowEnd: return [(0.6, 1), (0.4, 0.4)]
+        }
+    }
+}

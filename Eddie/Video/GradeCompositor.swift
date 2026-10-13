@@ -200,6 +200,7 @@ final class GradeCompositor: NSObject, AVVideoCompositing {
             source = crop(source, framing)
             var picture = GradeRenderer.shared.render(source, recipe: snap.recipe(for: layer.clipID), lut: snap.lut,
                                                       mode: mode, applyLUT: profile == .dlogM)
+            if clip?.removeBackground == true { picture = VisionTools.removeBackground(picture) }
             if let key = clip?.chromaKey { picture = VisualEffects.chromaKey(picture, key) }
             if let effects = clip?.effects, !effects.isEmpty { picture = VisualEffects.apply(effects, to: picture, time: now) }
             if let m = clip?.mask { picture = VisualEffects.mask(picture, m) }

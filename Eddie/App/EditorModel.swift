@@ -1511,6 +1511,68 @@ final class EditorModel: ObservableObject {
         else { updateClip(id, undo: .push) { $0.volumePoints.removeAll { $0.id == point } } }
     }
 
+    // MARK: Motion and vision
+
+    func speedRamp(_ ramp: SpeedRamp, for id: UUID? = nil) {
+        guard let id = id ?? selection, project.index(of: id) != nil else { return }
+        var ids: [UUID] = []
+        mutate(.push) { ids = $0.speedRamp(id, ramp) }
+        if let first = ids.first { selection = first }
+        append(.info, "\(ramp.label): \(ids.count) speed sections.")
+    }
+
+    /// Keeps the subject in the frame when a clip is cropped to the project's shape (e.g. 9:16).
+    func autoReframe(_ id: UUID? = nil) {
+        guard let id = id ?? selection, let clip = project.clip(id), !clip.isPhoto,
+              let source = media[clip.url]?.displaySize else { return }
+        let frame = projectSize
+        runAudioJob(id, "Reframing \(clip.name)") { [self] in
+            let keys = try await VisionTools.reframe(clip, source: source, frame: frame)
+            updateClip(id, undo: .push) { $0.keyframes = keys }
+            append(.info, "Reframed \(clip.name) to follow the subject.")
+        }
+    }
+
+    /// Steadies a shaky clip (zooms in slightly to hide the edges).
+    func stabilize(_ id: UUID? = nil, strength: Double = 0.7) {
+        guard let id = id ?? selection, let clip = project.clip(id), !clip.isPhoto,
+              let source = media[clip.url]?.displaySize else { return }
+        let frame = projectSize
+        runAudioJob(id, "Stabilizing \(clip.name)") { [self] in
+            let keys = try await VisionTools.stabilize(clip, source: source, frame: frame, strength: strength)
+            updateClip(id, undo: .push) { $0.keyframes = keys }
+            append(.info, "Stabilized \(clip.name).")
+        }
+    }
+
+    /// Makes an overlay (sticker, picture-in-picture…) follow what's under it, from the playhead to its end.
+    func trackOverlay(_ id: UUID? = nil) {
+        guard let id = id ?? selection, let o = project.overlays.first(where: { $0.id == id }) else { return }
+        let start = (clock.time >= o.start && clock.time < o.end - 0.2) ? clock.time : o.start
+        var underneath = project
+        underneath.overlays = []
+        underneath.titles = []
+        let pool = self.pool, lut = self.lut
+        let render = projectSize
+        let base = o.clip.transform(at: start - o.start)
+        let source = sourceSize(of: o.clip) ?? render
+        runAudioJob(id, "Tracking motion") { [self] in
+            let state = GradeState(ProjectCompiler.snapshot(for: underneath, lut: lut))
+            let compiled = try ProjectCompiler.compile(underneath, pool: pool, state: state)
+            let g = OverlayCanvas.geometry(source: source, transform: base, render: render, view: render)
+            let box = CGRect(x: (g.center.x - g.size.width / 2) / render.width, y: (g.center.y - g.size.height / 2) / render.height,
+                             width: g.size.width / render.width, height: g.size.height / render.height)
+                .intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
+            let keys = try await VisionTools.track(composition: compiled.composition, videoComposition: compiled.videoComposition,
+                                                  box: box, from: start, to: min(o.end, underneath.duration),
+                                                  overlayStart: o.start, base: base)
+            updateClip(id, undo: .push) { c in
+                c.keyframes = c.keyframes.filter { $0.time < start - o.start - 0.01 } + keys
+            }
+            append(.info, "The overlay now follows what's under it (\(keys.count) points).")
+        }
+    }
+
     // MARK: Stickers, effects, lanes
 
     static let stickerEmoji = ["😀", "😂", "🥹", "😍", "🤩", "😎", "🥳", "😮", "😱", "🤯", "😭", "😡", "🙌", "👏", "👍", "👎",

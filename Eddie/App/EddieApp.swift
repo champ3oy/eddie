@@ -319,7 +319,7 @@ enum Panels {
 
     static func saveExport(_ model: EditorModel, settings: ExportSettings) {
         let panel = NSSavePanel()
-        panel.allowedContentTypes = [settings.codec == .audio ? .mpeg4Audio : (settings.codec == .h264 ? .mpeg4Movie : .quickTimeMovie)]
+        panel.allowedContentTypes = [settings.codec == .gif ? .gif : (settings.codec == .audio ? .mpeg4Audio : (settings.codec == .h264 ? .mpeg4Movie : .quickTimeMovie))]
         let base = (model.fileName as NSString).deletingPathExtension
         panel.nameFieldStringValue = "\(base.isEmpty ? "video" : base).\(settings.fileExtension)"
         if panel.runModal() == .OK, let url = panel.url { model.export(to: url, settings: settings) }

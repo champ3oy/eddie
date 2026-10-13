@@ -3,7 +3,7 @@ import AVFoundation
 /// How a video is written out.
 struct ExportSettings: Equatable, Codable {
     enum Codec: String, CaseIterable, Identifiable, Codable {
-        case h264, hevc, prores, audio
+        case h264, hevc, prores, audio, gif
         var id: String { rawValue }
         var label: String {
             switch self {
@@ -11,6 +11,7 @@ struct ExportSettings: Equatable, Codable {
             case .hevc: return "HEVC — smaller, 10-bit"
             case .prores: return "ProRes 422 — for more editing"
             case .audio: return "Audio only (.m4a)"
+            case .gif: return "Animated GIF (small, no sound)"
             }
         }
     }
@@ -62,6 +63,8 @@ struct ExportSettings: Equatable, Codable {
         ("YouTube 4K (HEVC)", ExportSettings(codec: .hevc, resolution: .p2160, frameRate: .project)),
         ("Small file — 720p", ExportSettings(codec: .h264, resolution: .p720, frameRate: .fps30)),
         ("Master for editing (ProRes)", ExportSettings(codec: .prores, resolution: .project, frameRate: .project)),
+        ("Animated GIF", ExportSettings(codec: .gif, resolution: .project, frameRate: .project)),
+        ("Audio only", ExportSettings(codec: .audio, resolution: .project, frameRate: .project)),
     ]
 
     /// Output frame size for a project frame size (keeps the shape, even numbers).
@@ -78,11 +81,19 @@ struct ExportSettings: Equatable, Codable {
         case .hevc: return AVAssetExportPresetHEVCHighestQuality
         case .prores: return AVAssetExportPresetAppleProRes422LPCM
         case .audio: return AVAssetExportPresetAppleM4A
+        case .gif: return AVAssetExportPresetHighestQuality   // not used: GIFs are drawn frame by frame
         }
     }
 
     var fileType: AVFileType { codec == .audio ? .m4a : (codec == .h264 ? .mp4 : .mov) }
-    var fileExtension: String { codec == .audio ? "m4a" : (codec == .h264 ? "mp4" : "mov") }
+    var fileExtension: String {
+        switch codec {
+        case .audio: return "m4a"
+        case .gif: return "gif"
+        case .h264: return "mp4"
+        default: return "mov"
+        }
+    }
 
     /// Rough file size in MB per minute at this frame size (for the export sheet).
     func megabytesPerMinute(for size: CGSize, fps: Double) -> Double {
@@ -93,6 +104,7 @@ struct ExportSettings: Equatable, Codable {
         case .hevc: bitsPerPixel = 0.08
         case .prores: bitsPerPixel = 2.4
         case .audio: return 1.9   // 256 kbps AAC
+        case .gif: bitsPerPixel = 0.9 * 640 * 360 / max(1, Double(size.width * size.height))   // ~640 px wide, 12 fps
         }
         return pixels * bitsPerPixel * 60 / 8 / 1_000_000
     }

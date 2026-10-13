@@ -95,6 +95,8 @@ struct ClipItem: Identifiable, Codable, Equatable {
     var chromaKey: ChromaKey? = nil
     /// Volume over time (seconds into the clip); empty = steady.
     var volumePoints: [VolumePoint] = []
+    /// Cut people out of their background (AI segmentation, on this Mac).
+    var removeBackground = false
     var reversed = false
 
     static let speeds: [Double] = [0.25, 0.5, 1, 1.5, 2, 4]
@@ -148,6 +150,7 @@ extension ClipItem {
         mask = try c.decodeIfPresent(ClipMask.self, forKey: .mask)
         chromaKey = try c.decodeIfPresent(ChromaKey.self, forKey: .chromaKey)
         volumePoints = try c.decodeIfPresent([VolumePoint].self, forKey: .volumePoints) ?? []
+        removeBackground = try c.decodeIfPresent(Bool.self, forKey: .removeBackground) ?? false
     }
 }
 
@@ -682,6 +685,31 @@ struct Project: Codable, Equatable {
         if let start { c.sourceStart = min(max(0, start), c.sourceEnd - ClipItem.minLength) }
         if let end { c.sourceEnd = max(min(limit, end), c.sourceStart + ClipItem.minLength) }
         return c
+    }
+
+    /// Replaces a main-track clip with pieces at the ramp's speeds (same source, same look). Returns the piece ids.
+    @discardableResult
+    mutating func speedRamp(_ id: UUID, _ ramp: SpeedRamp) -> [UUID] {
+        guard let i = index(of: id) else { return [] }
+        let c = clips[i]
+        guard !c.isPhoto, !c.reversed else { return [] }
+        var pieces: [ClipItem] = []
+        var t = c.sourceStart
+        for (n, piece) in ramp.pieces.enumerated() {
+            var p = c
+            p.id = n == 0 ? c.id : UUID()
+            p.sourceStart = t
+            t = n == ramp.pieces.count - 1 ? c.sourceEnd : t + c.sourceLength * piece.fraction
+            p.sourceEnd = t
+            p.speed = piece.speed
+            p.keyframes = []
+            p.volumePoints = []
+            if n > 0 { p.transitionIn = nil; p.audioFadeIn = 0 }
+            if n < ramp.pieces.count - 1 { p.audioFadeOut = 0 }
+            pieces.append(p)
+        }
+        clips.replaceSubrange(i...i, with: pieces)
+        return pieces.map(\.id)
     }
 
     mutating func setSpeed(_ id: UUID, _ speed: Double) {

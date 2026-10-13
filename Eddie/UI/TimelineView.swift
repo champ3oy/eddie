@@ -749,6 +749,11 @@ struct TimelineView: View {
                     .disabled(clip.reversed)
                 if clip.audioOverride != nil && !clip.reversed { Button("Use Original Sound") { model.resetAudio(clip.id) } }
             }
+            Menu("Speed Ramp") {
+                ForEach(SpeedRamp.allCases) { r in Button(r.label) { model.speedRamp(r, for: clip.id) } }
+            }
+            Button("Stabilize") { model.stabilize(clip.id) }
+            Button("Auto Reframe (follow the subject)") { model.autoReframe(clip.id) }
             Button("Extract Audio to Its Own Lane") { model.extractAudio(clip.id) }
             voiceEffectMenu(clip.id, active: clip.audioOverride != nil && !clip.reversed)
             Button("Freeze Frame at Playhead") { model.freezeFrame() }
@@ -970,6 +975,8 @@ struct TimelineView: View {
         .contextMenu {
             Button("Full Frame") { model.updateClip(item.id, undo: .push) { $0.transform = .identity; $0.keyframes = [] } }
             Button("Picture in Picture") { model.updateClip(item.id, undo: .push) { $0.transform = EditorModel.pipTransform; $0.keyframes = [] } }
+            Button("Track Motion from the Playhead") { model.selection = item.id; model.trackOverlay(item.id) }
+            Button(item.clip.removeBackground ? "Keep Background" : "Cut Out People") { model.updateClip(item.id, undo: .push) { $0.removeBackground.toggle() } }
             Button(item.clip.audioMuted ? "Turn Sound On" : "Turn Sound Off") { model.updateClip(item.id, undo: .push) { $0.audioMuted.toggle() } }
             Divider()
             Button("Delete", role: .destructive) { model.selection = item.id; model.deleteSelection() }
