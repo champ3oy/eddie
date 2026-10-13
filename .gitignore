@@ -1,0 +1,16 @@
+# Build output
+build/
+DerivedData/
+*.xcresult
+
+# Xcode user state
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# macOS
+.DS_Store
+
+# Secrets, just in case
+.env
+*.env
