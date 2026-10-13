@@ -196,6 +196,7 @@ struct TitleSection: View {
                     ForEach(NSFontManager.shared.availableFontFamilies, id: \.self) { f in fontButton(f) }
                 }
             }
+            .demoAnchor("title-font")
 
             // Weight
             Row.segmented(TitleItem.Weight.allCases, selected: item.resolvedWeight, title: { $0.label }) { w in
@@ -217,6 +218,7 @@ struct TitleSection: View {
                 }
                 ColorPicker("", selection: colorBinding, supportsOpacity: false)
                     .labelsHidden()
+                    .demoAnchor("title-color")
                     .frame(width: 30)
                     .help("Text color")
                 Spacer(minLength: 0)
@@ -255,6 +257,8 @@ struct TitleSection: View {
         }
         .onAppear { text = item.text; editing = item.text == "Title" || item.text == "Caption" }
         .onChange(of: item.id) { text = item.text }
+        // Text changed elsewhere (the AI, undo, the demo) shows up here too, unless you're typing.
+        .onChange(of: item.text) { old, new in if text == old { text = new } }
     }
 
     static let popularFonts = ["Helvetica Neue", "Avenir Next", "Futura", "Gill Sans", "Optima", "Didot", "Georgia",

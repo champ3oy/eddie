@@ -13,8 +13,8 @@ title and make it warmer."*
 <p align="center">
   <img src="docs/media/demo.gif" alt="Eddie demo: AI grading, overlays, titles, music and fades" width="100%">
 </p>
-<p align="center"><sub>AI grade (sped up) · before/after · picture-in-picture overlay · title · music · fade lines ·
-playback — <a href="docs/media/demo.mp4">full-quality video</a></sub></p>
+<p align="center"><sub>8K log footage → AI grade (sped up) · before/after · overlay moved, shrunk and tilted · serif yellow
+title · music · fade lines · playback — <a href="docs/media/demo.mp4">full-quality video</a></sub></p>
 
 Eddie is written in Swift and SwiftUI on top of AVFoundation and Core Image. Everything runs on
 your Mac; the only thing that ever leaves it is what you send to the AI provider you choose.

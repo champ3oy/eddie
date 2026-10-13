@@ -70,6 +70,10 @@ final class DemoDirector {
         w.makeKeyAndOrderFront(nil)
         NSApp.activate()
         model.createProject()
+        // Heavy footage (4K/8K) gets its playback copy before recording, so nothing rebuilds mid-demo.
+        log("preparing playback copy")
+        _ = try? await MediaCache.makeProxy(for: URL(fileURLWithPath: clip))
+        log("playback copy ready")
         await sleep(1.0)
         pointer.show(at: center(of: w.frame))
 
@@ -121,9 +125,10 @@ final class DemoDirector {
         if let o = model.project.overlays.first {
             model.selection = o.id
             await sleep(0.8)
-            await dragOverlay(o.id, to: (x: -0.26, y: 0.2), duration: 1.4)
-            await resizeOverlay(o.id, to: 0.5, duration: 1.0)
-            await rotateOverlay(o.id, to: -12, duration: 0.9)
+            // Into the bottom-right corner, then small, then a slight tilt.
+            await dragOverlay(o.id, to: (x: 0.33, y: 0.29), duration: 1.4)
+            await resizeOverlay(o.id, to: 0.17, duration: 1.0)
+            await rotateOverlay(o.id, to: -10, duration: 0.9)
         }
         await sleep(0.6)
 
@@ -139,7 +144,12 @@ final class DemoDirector {
                 await sleep(0.07)
             }
             await sleep(0.5)
-            await dragTitle(t.id, to: CGPoint(x: 0.5, y: 0.2), duration: 1.3)
+            // A serif font, then yellow.
+            await clickAnchor("title-font") { [self] in model.updateTitle(t.id, undo: .push) { $0.font = "Georgia" } }
+            await sleep(0.7)
+            await clickAnchor("title-color") { [self] in model.updateTitle(t.id, undo: .push) { $0.color = "#FFD60A" } }
+            await sleep(0.7)
+            await dragTitle(t.id, to: CGPoint(x: 0.5, y: 0.22), duration: 1.3)
         }
         await sleep(0.6)
 
@@ -153,7 +163,7 @@ final class DemoDirector {
         if let m = model.project.music.first {
             model.selection = m.id
             await sleep(0.4)
-            await dragFade(block: "music-\(m.id)", duration: m.duration, from: m.fadeIn, to: 3.5, atStart: true) { [self] v in
+            await dragFade(block: "music-\(m.id)", duration: m.duration, from: m.fadeIn, to: min(3.5, m.duration / 2.5), atStart: true) { [self] v in
                 model.updateMusic(m.id, undo: .none) { $0.fadeIn = v }
             }
         }
@@ -164,10 +174,11 @@ final class DemoDirector {
             model.updateClip(c.id, undo: .push) { $0.transitionIn = Transition(kind: .dipToBlack, duration: 0.05) }
             model.setFadeOut(0.05)
             await sleep(0.4)
-            await dragFade(block: "clip-\(c.id)", duration: c.duration, from: 0.05, to: 1.5, atStart: true) { [self] v in
+            let fade = min(1.5, c.duration / 4)
+            await dragFade(block: "clip-\(c.id)", duration: c.duration, from: 0.05, to: fade, atStart: true) { [self] v in
                 model.updateClip(c.id, undo: .none) { $0.transitionIn = Transition(kind: .dipToBlack, duration: v) }
             }
-            await dragFade(block: "clip-\(c.id)", duration: c.duration, from: 0.05, to: 2.0, atStart: false) { [self] v in
+            await dragFade(block: "clip-\(c.id)", duration: c.duration, from: 0.05, to: fade, atStart: false) { [self] v in
                 model.mutate(.none) { $0.fadeOut = v }
             }
         }
@@ -178,8 +189,8 @@ final class DemoDirector {
         model.seek(to: 0)
         await clickAnchor("play") { [self] in model.togglePlay() }
         mark("play")
-        await sleep(7.5)
-        model.togglePlay()
+        await sleep(min(7.5, model.project.duration + 0.8))
+        if model.clock.playing { model.togglePlay() }
         await sleep(1.0)
         mark("end")
 
