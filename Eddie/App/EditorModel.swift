@@ -1174,10 +1174,19 @@ final class EditorModel: ObservableObject {
 
     /// Listens to the clips (on this Mac) and adds captions, replacing earlier auto captions.
     /// The language spoken in the clips (for auto captions).
-    @Published var captionLanguage = UserDefaults.standard.string(forKey: "captionLanguage") ?? Locale.current.identifier {
+    @Published var captionLanguage = UserDefaults.standard.string(forKey: "captionLanguage") ?? EditorModel.defaultSpeechLanguage {
         didSet { UserDefaults.standard.set(captionLanguage, forKey: "captionLanguage") }
     }
     var captionLocale: Locale { Locale(identifier: captionLanguage) }
+
+    /// The Mac's language as a speech-recognition code ("en_US" → "en-US"), or US English.
+    static var defaultSpeechLanguage: String {
+        let id = Locale.current.identifier.replacingOccurrences(of: "_", with: "-")
+        let known = CaptionsPanel.speechLanguages.map(\.0)
+        if known.contains(id) { return id }
+        let lang = Locale.current.language.languageCode?.identifier ?? "en"
+        return known.first { $0.hasPrefix(lang + "-") } ?? "en-US"
+    }
 
     func autoCaptions() {
         guard hasProject, !captioning else { return }
@@ -1850,6 +1859,25 @@ final class EditorModel: ObservableObject {
             if project.music.contains(where: { $0.id == id }) { reduceNoise(musicID: id) } else { processClipAudio(id, reduceNoise: true) }
         case .captions: autoCaptions()
         case .beats(let id): detectBeats(id)
+        case .translateCaptions(let language, let bilingual): translateCaptions(to: language, bilingual: bilingual)
+        case .removeFillers: removeFillerWords()
+        case .removePauses(let minimum): removeSilences(minimum: minimum)
+        case .sticker(let emoji, let at, let transform):
+            seek(to: at)
+            addSticker(emoji)
+            if let id = selection, project.overlays.contains(where: { $0.id == id }) {
+                updateClip(id, undo: .none) { $0.transform = transform }
+            }
+        case .extractAudio(let id): extractAudio(id)
+        case .speech(let text, let at, let voice, let rate):
+            let match = voice.flatMap { v in SpeechMaker.voices().first { $0.name.lowercased().contains(v.lowercased()) || $0.id == v }?.id }
+            addSpeech(text, voice: match, rate: rate, at: at)
+        case .voiceEffect(let id, let effect): applyVoiceEffect(effect, to: id)
+        case .reframe(let id): autoReframe(id)
+        case .stabilize(let id): stabilize(id)
+        case .track(let id, let from):
+            seek(to: from)
+            trackOverlay(id)
         }
     }
 

@@ -119,7 +119,19 @@ Editing works without a key; only Auto Grade, "Ask Eddie" and AI color need one.
   Ken Burns slow zoom.
 - **Titles**: title, lower third and caption styles; any font, weight, color and background plate; drag,
   resize and rotate on the video.
-- **Auto captions** from speech, transcribed on your Mac.
+- **Captions:** auto captions from speech (on your Mac, in many languages), typed or pasted captions,
+  SRT import and export, translation (any language, or bilingual), and a transcript editor to fix, split
+  and merge lines. One-click styles (Bold, Highlight, Karaoke, Neon, Typewriter…) with word-by-word
+  highlighting.
+- **Text looks:** outline, glow, and animations (pop, slide, bounce, typewriter) for titles and captions.
+- **Tighten the edit:** cut out filler words ("um", "uh") and long pauses automatically.
+- **Effects:** blur, sharpen, vignette, film grain, glitch, camera shake, VHS, light leaks, pixelate, mirror.
+- **Masks** (circle, rectangle, linear, feathered), **green screen**, **blend modes**, and **people cut-out**
+  (background removal).
+- **Stickers and emoji**, **multiple overlay lanes**, and **lock or hide** any lane.
+- **Smart tools:** speed ramps (hero, bullet time, montage…), **stabilization**, **auto reframe** that follows
+  the subject when going vertical, and **motion tracking** so a sticker or overlay follows an object.
+- **Blurred background** behind clips that don't fill the frame.
 - **Shape**: 16:9, 9:16 (Reels / TikTok / Shorts), 1:1 or 4:5, fill or fit.
 - **Snapping** to the playhead, edges, markers and the music's beats.
 - Multi-select, copy / cut / paste, **insert or overwrite** edits, markers, J/K/L shuttle, and a
@@ -133,6 +145,10 @@ Editing works without a key; only Auto Grade, "Ask Eddie" and AI color need one.
 - **Normalize loudness** and **reduce background noise** (Apple's voice isolation), rendered to new files —
   your originals are never touched.
 - **Find the beat** of a song so cuts can land on it.
+- **Volume lines:** double-click an audio block to add points and shape its volume over time.
+- **Voice effects** (robot, deep, chipmunk, echo, old radio, alien, cathedral) and **text to speech** with the
+  Mac's voices.
+- **Extract audio** from a clip onto its own lane.
 
 ### Projects, media and export
 - A **Projects** screen; every project saves itself as you work. Projects only point to your media —
@@ -140,7 +156,8 @@ Editing works without a key; only Auto Grade, "Ask Eddie" and AI color need one.
 - A **media bin** per project (drag files in from Finder). If files move, Eddie helps you find them again.
 - **1080p playback proxies** for 4K footage, and disk caches for thumbnails and waveforms.
 - **Export** with presets (best quality, social 1080p, YouTube 4K, small file, ProRes master) or pick
-  HEVC 10-bit / H.264 MP4 / ProRes 422, size and frame rate. Progress shows over the video, with Cancel.
+  HEVC 10-bit / H.264 MP4 / ProRes 422 / audio only / animated GIF, size and frame rate. Progress shows over the
+  video, with Cancel.
 
 ---
 

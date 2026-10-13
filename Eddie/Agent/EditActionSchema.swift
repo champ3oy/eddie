@@ -5,7 +5,10 @@ import Foundation
 enum EditActionSchema {
     static let types = ["split", "trim", "delete", "move", "duplicate", "speed", "clip_volume", "add_title", "edit_title",
                         "music", "preset", "color", "seek", "transition", "fade", "clip_fade", "format", "framing",
-                        "ken_burns", "profile", "overlay", "marker", "reverse", "freeze", "clean_audio", "captions", "beats"]
+                        "ken_burns", "profile", "overlay", "marker", "reverse", "freeze", "clean_audio", "captions", "beats",
+                        "caption_style", "add_caption", "captions_from_text", "translate_captions", "remove_fillers",
+                        "remove_pauses", "effect", "mask", "green_screen", "blend", "remove_background", "sticker", "lane",
+                        "extract_audio", "speech", "voice_effect", "volume_point", "speed_ramp", "reframe", "stabilize", "track"]
 
     /// Field name → JSON type.
     static let fields: [String: String] = [
@@ -15,6 +18,10 @@ enum EditActionSchema {
         "size": "number", "rotation": "number", "font": "string", "color": "string", "weight": "string",
         "starts_at": "number", "fade_in": "number", "fade_out": "number", "preset": "string", "instruction": "string",
         "kind": "string", "aspect": "string", "opacity": "number", "layout": "string", "profile": "string", "fill": "boolean",
+        "language": "string", "bilingual": "boolean", "outline": "number", "outline_color": "string", "glow": "number",
+        "glow_color": "string", "animation": "string", "word_highlight": "boolean", "highlight_color": "string",
+        "amount": "number", "width": "number", "height": "number", "feather": "number", "invert": "boolean",
+        "enabled": "boolean", "blur_background": "boolean", "voice": "string",
     ]
 
     /// JSON Schema for one action. `strict` is the form some providers' JSON modes need (every field present, nullable).
@@ -44,7 +51,9 @@ enum EditActionSchema {
     - add_title: text, at, duration, style ("title" | "lowerThird" | "caption"), optional x and y (0–1, center of the \
     text, y from the top), size (1 = normal, 0.3–4), rotation (degrees, clockwise), font ("System", "Rounded", "Serif", \
     "Mono" or a font family like "Georgia", "Futura", "Avenir Next", "Didot", "Marker Felt"), color ("#RRGGBB"), weight \
-    ("regular" | "medium" | "bold" | "heavy"). Use \\n for a line break.
+    ("regular" | "medium" | "bold" | "heavy"), outline (0–0.25 of the font size) + outline_color, glow (0–1) + glow_color, \
+    animation ("fade" | "pop" | "slideUp" | "slideDown" | "typewriter" | "bounce" | "none"), word_highlight (true lights \
+    each word as it's said) + highlight_color. Use \\n for a line break.
     - edit_title: title, then any of the add_title fields to change.
     - music: music, optional volume (0–1), at (timeline start), starts_at (seconds into the song), duration, fade_in, fade_out.
     - preset: clip (or "all"), preset — one of Warm, Cool, Bright, Punchy, Soft, Vivid, Moody, Cinematic, Golden, Faded, Mono.
@@ -55,7 +64,8 @@ enum EditActionSchema {
     - fade: fade_in (seconds, fade from black at the start; 0 removes), fade_out (seconds, fade to black at the end).
     - clip_fade: clip (or overlay, or "all"), fade_in, fade_out — fade the clip's own sound in/out.
     - format: aspect ("landscape" 16:9 | "portrait" 9:16 for Reels/TikTok/Shorts | "square" | "portrait4x5" | "auto"), \
-    optional fill (true = crop to fill the frame, false = fit inside with black bars).
+    optional fill (true = crop to fill the frame, false = fit inside), blur_background (true = a blurred copy of the clip \
+    instead of black bars when fitting).
     - framing: clip or overlay, any of size (zoom, 1 = normal), x and y (offset, -1…1 of the frame, y down), rotation.
     - ken_burns: clip or overlay (or "all"), optional size (end zoom, e.g. 1.2) — a slow push-in.
     - profile: clip or overlay (or "all"), profile ("dlogM" for log footage | "normal" for phone/normal footage).
@@ -68,6 +78,38 @@ enum EditActionSchema {
     - clean_audio: target (a clip, overlay or song), kind ("normalize" | "noise") — even out loudness or remove background noise.
     - captions: — transcribe the speech in the clips into captions (replaces earlier auto captions).
     - beats: music — find the song's beat so cuts can line up with it.
+    Captions (on their own lane; they're titles with style "caption"):
+    - caption_style: preset ("Classic" | "Bold" | "Highlight" | "Karaoke" | "Neon" | "Typewriter" | "Minimal" | "Serif"), \
+    plus any title look fields — restyles every caption.
+    - add_caption: text, at, duration — one caption (takes the captions' current look).
+    - captions_from_text: text (one caption per line), optional at and duration (the span to spread them over; default \
+    the whole video), fill (false = keep existing captions).
+    - translate_captions: language ("Spanish", "French"…), bilingual (true keeps the original line too).
+    - remove_fillers: — cut "um", "uh"… out of the edit. remove_pauses: duration (minimum pause, default 0.7 s).
+    Look:
+    - effect: clip or overlay (or "all"), kind ("blur" | "sharpen" | "vignette" | "grain" | "glitch" | "shake" | "vhs" | \
+    "lightLeak" | "pixelate" | "mirror" | "none"), amount (0–1; 0 removes that effect).
+    - mask: clip or overlay, kind ("circle" | "rectangle" | "linear" | "none"), x and y (center, 0–1 of the picture, y \
+    down), width and height (0–1.5) or size for both, feather (0–1 soft edge), rotation, invert.
+    - green_screen: clip or overlay, optional color ("#00FF00" default), amount (strength 0–1), feather (edge softness), \
+    enabled (false turns it off).
+    - blend: target (o1…), kind ("normal" | "multiply" | "screen" | "overlay" | "softLight" | "lighten" | "darken" | \
+    "difference" | "add").
+    - remove_background: clip or overlay, enabled — cut the people out of their background.
+    - sticker: text (an emoji), at, optional size (0.22 default), x, y (offset like framing), rotation.
+    - lane: target ("video" | "titles" | "captions" | "overlay0", "overlay1"… | "clipsound" | "audio0"…), kind ("hide" | \
+    "show" | "lock" | "unlock").
+    Sound:
+    - extract_audio: clip — move its sound onto its own audio lane.
+    - speech: text, at, optional voice (a Mac voice name like "Samantha"), speed (0.5–1.5) — text to speech voiceover.
+    - voice_effect: target (a song m1… or a clip), kind ("robot" | "deep" | "chipmunk" | "echo" | "radio" | "alien" | \
+    "cathedral" | "none").
+    - volume_point: target (a song or clip), at (timeline seconds), volume (0–1) — shape the volume over time.
+    Motion:
+    - speed_ramp: clip, kind ("hero" | "bullet" | "montage" | "flashIn" | "flashOut" | "slowEnd").
+    - reframe: clip — keep the subject centered when the clip is cropped to the video's shape (e.g. after format portrait).
+    - stabilize: clip or overlay — steady a shaky shot.
+    - track: target (an overlay o1… placed over something), at (start time) — the overlay follows that thing.
 
     Labels: c1, c2… are clips in their current order; o1… overlays; t1… titles; m1… songs, voiceovers and sound \
     effects; k1… markers. Labels are renumbered after every edit, so always use the labels from the latest timeline.

@@ -114,6 +114,19 @@ final class SnapshotTests: XCTestCase {
         model.toggleLaneMute(Project.clipSoundLane)
         try await Task.sleep(for: .milliseconds(800))
         try snapshot(model, to: dir.appendingPathComponent("11_trimmed.png"))
+        // Captions panel + caption lane, and the effects / mask / green screen cards.
+        UserDefaults.standard.set(false, forKey: "showMediaBin")
+        UserDefaults.standard.set(true, forKey: "showCaptions")
+        model.addManualCaptions("Welcome to Eddie\nCaptions can be typed\nor made from speech", fromPlayhead: false, replacing: true)
+        model.applyCaptionPreset("Highlight")
+        if let o = model.project.overlays.first {
+            model.updateClip(o.id, undo: .push) { $0.effects = [ClipEffect(kind: .vhs, amount: 0.6)]; $0.mask = ClipMask() }
+            model.selection = o.id
+        }
+        model.seek(to: 0.4)
+        try await Task.sleep(for: .milliseconds(800))
+        try snapshot(model, to: dir.appendingPathComponent("14_captions.png"))
+        UserDefaults.standard.removeObject(forKey: "showCaptions")
         UserDefaults.standard.removeObject(forKey: "showMediaBin")
         UserDefaults.standard.removeObject(forKey: "inspector.framingOpen")
 

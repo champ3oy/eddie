@@ -36,6 +36,23 @@ struct EditAction: Codable, Equatable {
     var layout: String? = nil
     var profile: String? = nil
     var fill: Bool? = nil
+    var language: String? = nil
+    var bilingual: Bool? = nil
+    var outline: Double? = nil
+    var outline_color: String? = nil
+    var glow: Double? = nil
+    var glow_color: String? = nil
+    var animation: String? = nil
+    var word_highlight: Bool? = nil
+    var highlight_color: String? = nil
+    var amount: Double? = nil
+    var width: Double? = nil
+    var height: Double? = nil
+    var feather: Double? = nil
+    var invert: Bool? = nil
+    var enabled: Bool? = nil
+    var blur_background: Bool? = nil
+    var voice: String? = nil
 }
 
 /// Work the agent asks for that the app does after the edit (it takes time or needs the media).
@@ -46,6 +63,16 @@ enum EditJob: Equatable {
     case reduceNoise(UUID)
     case captions
     case beats(UUID)
+    case translateCaptions(language: String, bilingual: Bool)
+    case removeFillers
+    case removePauses(minimum: Double)
+    case sticker(emoji: String, at: Double, transform: Transform2D)
+    case extractAudio(UUID)
+    case speech(text: String, at: Double, voice: String?, rate: Double)
+    case voiceEffect(UUID, AudioProcessor.VoiceEffect?)
+    case reframe(UUID)
+    case stabilize(UUID)
+    case track(UUID, from: Double)
 }
 
 struct EditPlan: Codable {
@@ -96,6 +123,7 @@ enum TimelineDescriber {
             if c.audioFadeIn > 0 || c.audioFadeOut > 0 { extras.append("sound fades \(t(c.audioFadeIn))/\(t(c.audioFadeOut))") }
             if c.transform != .identity { extras.append(framing(c.transform)) }
             if !c.keyframes.isEmpty { extras.append("animated framing (\(c.keyframes.count) keyframes)") }
+            extras += looks(c)
             lines.append("  c\(i + 1): \"\(c.name)\" at \(t(start))–\(t(start + c.duration)) (\(t(c.duration)) long), " + extras.joined(separator: ", "))
         }
         lines.append("Overlays (on top of the clips, B-roll or picture-in-picture):")
@@ -104,6 +132,9 @@ enum TimelineDescriber {
             var parts = ["\"\(o.clip.name)\" at \(t(o.start))–\(t(o.end))", o.clip.transform.scale < 0.95 ? "picture-in-picture" : "full frame",
                          "opacity \(Int((o.opacity * 100).rounded()))%"]
             if o.clip.transform != .identity { parts.append(framing(o.clip.transform)) }
+            if o.blend != .normal { parts.append("blend \(o.blend.rawValue)") }
+            parts.append("lane \(o.lane)")
+            parts += looks(o.clip)
             lines.append("  o\(i + 1): " + parts.joined(separator: ", "))
         }
         lines.append("Titles:")
@@ -115,6 +146,11 @@ enum TimelineDescriber {
             if ti.rotation != 0 { parts.append("rotation \(Int(ti.rotation))°") }
             parts.append("font \(ti.font)")
             parts.append("color \(ti.color)")
+            if ti.isCaption { parts.append("caption") }
+            if ti.outline > 0 { parts.append(String(format: "outline %.2f", ti.outline)) }
+            if ti.glow > 0 { parts.append(String(format: "glow %.1f", ti.glow)) }
+            if ti.animation != .fade { parts.append("animation \(ti.animation.rawValue)") }
+            if ti.wordHighlight { parts.append("word highlight \(ti.highlightColor)") }
             lines.append("  t\(i + 1): " + parts.joined(separator: ", "))
         }
         lines.append("Music:")
@@ -122,11 +158,24 @@ enum TimelineDescriber {
         for (i, m) in p.music.enumerated() {
             lines.append("  m\(i + 1) (\(m.kind.rawValue)\(m.beats.isEmpty ? "" : ", beats found")): \"\(m.name)\" at \(t(m.start))–\(t(m.end)), starts \(t(m.sourceStart)) into the song, volume \(Int((m.volume * 100).rounded()))%, fade in \(t(m.fadeIn)), fade out \(t(m.fadeOut))")
         }
+        if !p.hiddenLanes.isEmpty { lines.append("Hidden lanes: " + p.hiddenLanes.sorted().joined(separator: ", ")) }
+        if !p.lockedLanes.isEmpty { lines.append("Locked lanes: " + p.lockedLanes.sorted().joined(separator: ", ")) }
         if !p.markers.isEmpty {
             lines.append("Markers: " + p.markers.enumerated().map { "k\($0.offset + 1) \"\($0.element.name)\" at \(t($0.element.time))" }.joined(separator: ", "))
         }
-        lines.append("Format: \(p.format.aspect.rawValue)\(p.format.fill ? "" : " (fit inside)"), fade out at the end: \(p.fadeOut > 0 ? t(p.fadeOut) : "none").")
+        lines.append("Format: \(p.format.aspect.rawValue)\(p.format.fill ? "" : (p.format.blurBackground ? " (fit inside, blurred background)" : " (fit inside)")), fade out at the end: \(p.fadeOut > 0 ? t(p.fadeOut) : "none").")
         return lines.joined(separator: "\n")
+    }
+
+    /// Effects, mask, green screen, cut-out and volume line of a clip, briefly.
+    static func looks(_ c: ClipItem) -> [String] {
+        var out: [String] = []
+        if !c.effects.isEmpty { out.append("effects " + c.effects.map { "\($0.kind.rawValue) \(Int($0.amount * 100))%" }.joined(separator: ", ")) }
+        if let m = c.mask { out.append("\(m.shape.rawValue) mask\(m.invert ? " (inverted)" : "")") }
+        if let k = c.chromaKey { out.append("green screen \(k.color)") }
+        if c.removeBackground { out.append("people cut out") }
+        if !c.volumePoints.isEmpty { out.append("volume line (\(c.volumePoints.count) points)") }
+        return out
     }
 
     static func framing(_ f: Transform2D) -> String {
@@ -401,6 +450,193 @@ enum EditExecutor {
                 jobs.append(.beats(id))
                 log.append("Will find the beat of \(a.music ?? a.target!)")
 
+            // MARK: Captions
+
+            case "caption_style":
+                guard let preset = CaptionPreset.all.first(where: { $0.name.lowercased() == (a.preset ?? a.style ?? "").lowercased() }) else {
+                    errors.append("caption_style needs preset: \(CaptionPreset.all.map(\.name).joined(separator: ", "))"); continue
+                }
+                for i in p.titles.indices where p.titles[i].isCaption { preset.apply(&p.titles[i]); applyTitleFields(a, to: &p.titles[i]) }
+                log.append("Captions styled \(preset.name)")
+
+            case "add_caption":
+                let text = (a.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !text.isEmpty else { errors.append("add_caption needs text"); continue }
+                var c = TitleItem(text: text, start: max(0, a.at ?? playhead), duration: max(0.4, a.duration ?? 2), style: .caption)
+                c.isCaption = true
+                if let style = p.captions.first { copyLook(from: style, to: &c) }
+                applyTitleFields(a, to: &c)
+                p.titles.append(c)
+                log.append("Added caption \"\(text)\"")
+
+            case "captions_from_text":
+                let script = a.text ?? ""
+                var lines = CaptionMaker.manual(script, from: max(0, a.at ?? 0), to: a.duration.map { (a.at ?? 0) + $0 } ?? p.duration)
+                guard !lines.isEmpty else { errors.append("captions_from_text needs text (one caption per line)"); continue }
+                if let style = p.captions.first { for i in lines.indices { copyLook(from: style, to: &lines[i]) } }
+                if a.fill ?? true { p.titles.removeAll { $0.isCaption } }
+                p.titles.append(contentsOf: lines)
+                log.append("Added \(lines.count) captions from text")
+
+            case "translate_captions":
+                guard let language = a.language ?? a.text, !language.isEmpty else { errors.append("translate_captions needs language"); continue }
+                jobs.append(.translateCaptions(language: language, bilingual: a.bilingual ?? false))
+                log.append("Will translate the captions to \(language)")
+
+            case "remove_fillers":
+                jobs.append(.removeFillers)
+                log.append("Will cut filler words (um, uh…)")
+
+            case "remove_pauses":
+                jobs.append(.removePauses(minimum: max(0.3, a.duration ?? 0.7)))
+                log.append("Will cut pauses longer than \(String(format: "%.1f", max(0.3, a.duration ?? 0.7))) s")
+
+            // MARK: Look
+
+            case "effect":
+                guard let ids = anyClipTargets(a.clip ?? a.target) else { errors.append("effect: unknown clip \(a.clip ?? "?")"); continue }
+                let name = (a.kind ?? "").lowercased()
+                if name == "none" {
+                    for id in ids { p.updateClip(id) { $0.effects = [] } }
+                    log.append("Removed effects"); continue
+                }
+                guard let kind = ClipEffect.Kind.allCases.first(where: { $0.rawValue.lowercased() == name || $0.label.lowercased() == name }) else {
+                    errors.append("effect kind must be one of \(ClipEffect.Kind.allCases.map(\.rawValue).joined(separator: ", ")) or none"); continue
+                }
+                let amount = min(max(a.amount ?? 0.5, 0), 1)
+                for id in ids {
+                    p.updateClip(id) { c in
+                        if amount <= 0.001 { c.effects.removeAll { $0.kind == kind } }
+                        else if let i = c.effects.firstIndex(where: { $0.kind == kind }) { c.effects[i].amount = amount }
+                        else { c.effects.append(ClipEffect(kind: kind, amount: amount)) }
+                    }
+                }
+                log.append("\(kind.label) on \(a.clip ?? a.target!)")
+
+            case "mask":
+                guard let ids = anyClipTargets(a.clip ?? a.target) else { errors.append("mask: unknown clip \(a.clip ?? "?")"); continue }
+                let shape = (a.kind ?? "circle").lowercased()
+                for id in ids {
+                    p.updateClip(id) { c in
+                        if shape == "none" { c.mask = nil; return }
+                        var m = c.mask ?? ClipMask()
+                        m.shape = ClipMask.Shape(rawValue: shape) ?? .circle
+                        if let x = a.x { m.centerX = min(max(x, 0), 1) }
+                        if let y = a.y { m.centerY = min(max(y, 0), 1) }
+                        if let w = a.width ?? a.size { m.width = min(max(w, 0.05), 1.5) }
+                        if let h = a.height ?? a.size { m.height = min(max(h, 0.05), 1.5) }
+                        if let f = a.feather { m.feather = min(max(f, 0), 1) }
+                        if let r = a.rotation { m.rotation = r }
+                        if let inv = a.invert { m.invert = inv }
+                        c.mask = m
+                    }
+                }
+                log.append(shape == "none" ? "Removed mask" : "Mask (\(shape)) on \(a.clip ?? a.target!)")
+
+            case "green_screen":
+                guard let ids = anyClipTargets(a.clip ?? a.target) else { errors.append("green_screen: unknown clip \(a.clip ?? "?")"); continue }
+                for id in ids {
+                    p.updateClip(id) { c in
+                        if a.enabled == false { c.chromaKey = nil; return }
+                        var k = c.chromaKey ?? ChromaKey()
+                        if let col = a.color, col.hasPrefix("#"), col.count == 7 { k.color = col.uppercased() }
+                        if let t = a.amount { k.tolerance = min(max(t, 0), 1) }
+                        if let f = a.feather { k.softness = min(max(f, 0), 1) }
+                        c.chromaKey = k
+                    }
+                }
+                log.append(a.enabled == false ? "Green screen off" : "Green screen on \(a.clip ?? a.target!)")
+
+            case "blend":
+                guard let id = overlayID(a.target ?? a.clip),
+                      let mode = BlendMode.allCases.first(where: { $0.rawValue.lowercased() == (a.kind ?? "").lowercased() }) else {
+                    errors.append("blend needs target (o1…) and kind: \(BlendMode.allCases.map(\.rawValue).joined(separator: ", "))"); continue
+                }
+                p.updateOverlay(id) { $0.blend = mode }
+                log.append("Blend \(mode.label) on \(a.target ?? a.clip!)")
+
+            case "remove_background":
+                guard let ids = anyClipTargets(a.clip ?? a.target) else { errors.append("remove_background: unknown clip"); continue }
+                for id in ids { p.updateClip(id) { $0.removeBackground = a.enabled ?? true } }
+                log.append((a.enabled ?? true) ? "Cut out the people" : "Background back")
+
+            case "sticker":
+                let emoji = (a.text ?? "").trimmingCharacters(in: .whitespaces)
+                guard !emoji.isEmpty else { errors.append("sticker needs text (an emoji)"); continue }
+                jobs.append(.sticker(emoji: emoji, at: max(0, a.at ?? playhead),
+                                     transform: Transform2D(scale: a.size ?? 0.22, x: a.x ?? 0, y: a.y ?? 0, rotation: a.rotation ?? 0)))
+                log.append("Will add a \(emoji) sticker")
+
+            case "lane":
+                let key = (a.target ?? "").lowercased()
+                switch (a.kind ?? "").lowercased() {
+                case "hide": p.hiddenLanes.insert(key)
+                case "show": p.hiddenLanes.remove(key)
+                case "lock": p.lockedLanes.insert(key)
+                case "unlock": p.lockedLanes.remove(key)
+                default: errors.append("lane needs kind: hide, show, lock or unlock"); continue
+                }
+                log.append("\(a.kind!.capitalized) lane \(key)")
+
+            // MARK: Sound
+
+            case "extract_audio":
+                guard let id = clipID(a.clip ?? a.target) else { errors.append("extract_audio: unknown clip"); continue }
+                jobs.append(.extractAudio(id))
+                log.append("Will move \(a.clip ?? a.target!)'s sound onto its own lane")
+
+            case "speech":
+                let text = (a.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !text.isEmpty else { errors.append("speech needs text"); continue }
+                jobs.append(.speech(text: text, at: max(0, a.at ?? playhead), voice: a.voice, rate: a.speed ?? 1))
+                log.append("Will speak \"\(text.prefix(40))\"")
+
+            case "voice_effect":
+                let label = a.target ?? a.clip ?? a.music
+                guard let id = musicID(label) ?? anyClipTargets(label)?.first else { errors.append("voice_effect: unknown \(label ?? "?")"); continue }
+                let name = (a.kind ?? "").lowercased()
+                let effect = AudioProcessor.VoiceEffect.allCases.first { $0.rawValue.lowercased() == name }
+                guard effect != nil || name == "none" else {
+                    errors.append("voice_effect kind: \(AudioProcessor.VoiceEffect.allCases.map(\.rawValue).joined(separator: ", ")) or none"); continue
+                }
+                jobs.append(.voiceEffect(id, effect))
+                log.append("Will apply the \(name) voice to \(label!)")
+
+            case "volume_point":
+                let label = a.target ?? a.clip ?? a.music
+                guard let at = a.at, let v = a.volume else { errors.append("volume_point needs target, at and volume"); continue }
+                let level = min(max(v > 1 ? v / 100 : v, 0), 1)
+                if let id = musicID(label), let m = p.music.first(where: { $0.id == id }) {
+                    p.updateMusic(id) { $0.volumePoints.append(VolumePoint(time: max(0, at - m.start), level: level)); $0.volumePoints.sort { $0.time < $1.time } }
+                } else if let id = clipID(label), let start = p.start(of: id) {
+                    p.updateClip(id) { $0.volumePoints.append(VolumePoint(time: max(0, at - start), level: level)); $0.volumePoints.sort { $0.time < $1.time } }
+                } else { errors.append("volume_point: unknown \(label ?? "?")"); continue }
+                log.append(String(format: "Volume %d%% at %.2f s on %@", Int(level * 100), at, label!))
+
+            // MARK: Motion
+
+            case "speed_ramp":
+                guard let id = clipID(a.clip), let ramp = SpeedRamp.allCases.first(where: { $0.rawValue.lowercased() == (a.kind ?? "").lowercased() }) else {
+                    errors.append("speed_ramp needs clip and kind: \(SpeedRamp.allCases.map(\.rawValue).joined(separator: ", "))"); continue
+                }
+                p.speedRamp(id, ramp)
+                log.append("\(ramp.label) on \(a.clip!)")
+
+            case "reframe":
+                guard let ids = anyClipTargets(a.clip) else { errors.append("reframe: unknown clip"); continue }
+                for id in ids { jobs.append(.reframe(id)) }
+                log.append("Will reframe \(a.clip!) to follow the subject")
+
+            case "stabilize":
+                guard let ids = anyClipTargets(a.clip) else { errors.append("stabilize: unknown clip"); continue }
+                for id in ids { jobs.append(.stabilize(id)) }
+                log.append("Will stabilize \(a.clip!)")
+
+            case "track":
+                guard let id = overlayID(a.target ?? a.clip) else { errors.append("track needs target (an overlay o1…)"); continue }
+                jobs.append(.track(id, from: a.at ?? playhead))
+                log.append("Will make \(a.target ?? a.clip!) follow what's under it")
+
             default:
                 errors.append("Unknown action \(a.type)")
             }
@@ -408,7 +644,22 @@ enum EditExecutor {
         return Result(project: p, log: log, errors: errors, color: color, seek: seek, jobs: jobs)
     }
 
+    /// Gives a new caption the look of the existing captions.
+    private static func copyLook(from s: TitleItem, to c: inout TitleItem) {
+        c.font = s.font; c.weight = s.weight; c.italic = s.italic; c.color = s.color; c.plate = s.plate; c.size = s.size
+        c.outline = s.outline; c.outlineColor = s.outlineColor; c.glow = s.glow; c.glowColor = s.glowColor
+        c.animation = s.animation; c.wordHighlight = s.wordHighlight; c.highlightColor = s.highlightColor
+        c.x = s.x; c.y = s.y; c.align = s.align
+    }
+
     private static func applyTitleFields(_ a: EditAction, to t: inout TitleItem) {
+        if let o = a.outline { t.outline = min(max(o > 1 ? o / 100 : o, 0), 0.25) }
+        if let c = a.outline_color, c.hasPrefix("#"), c.count == 7 { t.outlineColor = c.uppercased() }
+        if let g = a.glow { t.glow = min(max(g > 1 ? g / 100 : g, 0), 1) }
+        if let c = a.glow_color, c.hasPrefix("#"), c.count == 7 { t.glowColor = c.uppercased() }
+        if let n = a.animation?.lowercased(), let anim = TitleItem.Animation.allCases.first(where: { $0.rawValue.lowercased() == n }) { t.animation = anim }
+        if let w = a.word_highlight { t.wordHighlight = w }
+        if let c = a.highlight_color, c.hasPrefix("#"), c.count == 7 { t.highlightColor = c.uppercased() }
         if let x = a.x { t.x = min(max(x, 0), 1); if t.y == nil { t.y = 0.5 } }
         if let y = a.y { t.y = min(max(y, 0), 1); if t.x == nil { t.x = 0.5 } }
         if let s = a.size { t.size = min(max(s > 4 ? s / 100 : s, 0.3), 4) }

@@ -59,6 +59,7 @@
 		8515803587076CA134C19627 /* DemoDirector.swift in Sources */ = {isa = PBXBuildFile; fileRef = A826F6BAD425104C0376D2FC /* DemoDirector.swift */; };
 		867ECD40EFB61919FBDF63B6 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BEB9E49F94103A7E612E332 /* ContentView.swift */; };
 		8A1FFF103A68C654EED03C17 /* photo_test.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 3C6A2F9675955ED699E4E753 /* photo_test.jpg */; };
+		98B1B03A2F3D37D59E200AAF /* AgentNewActionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B674E401798EA78F3861EAC3 /* AgentNewActionsTests.swift */; };
 		98F61531E6F876F2C038B95A /* GradeKernelSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA326C7863B762BCDA2DA167 /* GradeKernelSource.swift */; };
 		9B02D8895FADD51C7C16DE70 /* AgentTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 056278B237549D70D7517F8C /* AgentTools.swift */; };
 		9E060A625A903731919A8989 /* LayeredEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A87328C8E7C9BD72CFEEA4AA /* LayeredEngineTests.swift */; };
@@ -185,6 +186,7 @@
 		AB2356660B06B25E600C67A9 /* ExportSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportSettings.swift; sourceTree = "<group>"; };
 		B10CCF888EFB1913ABE6EDC6 /* EditorFeatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorFeatureTests.swift; sourceTree = "<group>"; };
 		B4AA6E6F149DA35E51BB7614 /* DemoAnchors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoAnchors.swift; sourceTree = "<group>"; };
+		B674E401798EA78F3861EAC3 /* AgentNewActionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentNewActionsTests.swift; sourceTree = "<group>"; };
 		B70331E733FC30EBE4492937 /* Exporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Exporter.swift; sourceTree = "<group>"; };
 		BAEE8E170603A5493B154AA4 /* eddie-mcp */ = {isa = PBXFileReference; includeInIndex = 0; path = "eddie-mcp"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BC15DC63823B8BDEABEB977E /* AgentServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentServer.swift; sourceTree = "<group>"; };
@@ -411,6 +413,7 @@
 		FA58E160E62444DB8B03D796 /* EddieTests */ = {
 			isa = PBXGroup;
 			children = (
+				B674E401798EA78F3861EAC3 /* AgentNewActionsTests.swift */,
 				C77797D8E2D7D8B770F67D0B /* AgentTests.swift */,
 				813B03E7992BB2A949055172 /* AITests.swift */,
 				19E2471A35C0ED56D99B9F6D /* AudioPackTests.swift */,
@@ -581,6 +584,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1016958D67D25372F90A74D7 /* AITests.swift in Sources */,
+				98B1B03A2F3D37D59E200AAF /* AgentNewActionsTests.swift in Sources */,
 				352AA61095AC3217A4EA1D8F /* AgentTests.swift in Sources */,
 				0CF0D13E451BC210B756F530 /* AudioPackTests.swift in Sources */,
 				07F12DC1C76E31953CFB3F66 /* CaptionTests.swift in Sources */,
