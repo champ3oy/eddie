@@ -6,6 +6,14 @@ struct SettingsView: View {
     @State private var keys: [ProviderKind: String] = [:]
     @State private var models: [ProviderKind: String] = [:]
     @State private var cacheSize: Int64 = 0
+    @State private var copied = false
+
+    private func copy(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        copied = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { copied = false }
+    }
 
     var body: some View {
         Form {
@@ -35,6 +43,37 @@ struct SettingsView: View {
                 Text("The LUT turns D-Log M into normal-looking Rec.709 before the AI's knobs apply.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+
+            Section("AI Agents") {
+                Toggle("Let AI agents control Eddie", isOn: $model.agentControl)
+                Text("Agents like Claude Code, Claude Desktop or Cursor can open projects, add footage, edit, grade and export through Eddie's MCP server. Everything happens in this window, and each change can be undone. Only apps on this Mac can connect.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if let error = model.agentServerError {
+                    Text(error).font(.caption).foregroundStyle(.red)
+                } else if model.agentControl {
+                    Label("Listening", systemImage: "dot.radiowaves.left.and.right").font(.caption).foregroundStyle(.secondary)
+                }
+                LabeledContent("Server") {
+                    Text(EditorModel.mcpHelperPath).font(.caption.monospaced()).textSelection(.enabled).lineLimit(2)
+                }
+                HStack {
+                    Button("Copy Claude Code Command") {
+                        copy("claude mcp add eddie -- \"\(EditorModel.mcpHelperPath)\"")
+                    }
+                    Button("Copy JSON Config") {
+                        copy("""
+                        {
+                          "mcpServers": {
+                            "eddie": { "command": "\(EditorModel.mcpHelperPath)" }
+                          }
+                        }
+                        """)
+                    }
+                    .help("For Claude Desktop, Cursor and other MCP apps")
+                    if copied { Text("Copied").font(.caption).foregroundStyle(.secondary) }
+                }
             }
 
             Section("Performance") {

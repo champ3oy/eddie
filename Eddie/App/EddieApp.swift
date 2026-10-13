@@ -171,11 +171,15 @@ struct EddieApp: App {
 /// Opens videos dropped on the Dock icon or chosen with "Open With".
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
+        AgentServer.shared.stop()
         MainActor.assumeIsolated { EditorModel.shared.saveNow() }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         DemoDirector.startIfRequested()
+        if NSClassFromString("XCTestCase") == nil {
+            MainActor.assumeIsolated { EditorModel.shared.updateAgentServer() }
+        }
     }
 
     func applicationWillFinishLaunching(_ notification: Notification) {

@@ -17,6 +17,12 @@ targets:
     platform: macOS
     sources:
       - Eddie
+    dependencies:
+      # The MCP helper ships inside the app, next to the main executable.
+      - target: eddie-mcp
+        embed: true
+        copy:
+          destination: executables
     info:
       path: Eddie/Info.plist
       properties:
@@ -40,6 +46,18 @@ targets:
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
         ENABLE_HARDENED_RUNTIME: NO
+  eddie-mcp:
+    type: tool
+    platform: macOS
+    sources:
+      - EddieMCP
+      - path: Eddie/Agent/AgentProtocol.swift
+      - path: Eddie/Agent/EditActionSchema.swift
+    settings:
+      base:
+        PRODUCT_NAME: eddie-mcp
+        PRODUCT_BUNDLE_IDENTIFIER: local.eddie.mcp
+        SKIP_INSTALL: YES
   EddieTests:
     type: bundle.unit-test
     platform: macOS

@@ -28,6 +28,7 @@ your Mac; the only thing that ever leaves it is what you send to the AI provider
 - [Getting started](#getting-started)
 - [Set up the AI](#set-up-the-ai)
 - [What it can do](#what-it-can-do)
+- [Use it from your AI agent (MCP)](#use-it-from-your-ai-agent-mcp)
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [How it works](#how-it-works)
 - [Privacy](#privacy)
@@ -135,6 +136,44 @@ Editing works without a key; only Auto Grade, "Ask Eddie" and AI color need one.
 
 ---
 
+## Use it from your AI agent (MCP)
+
+Eddie includes an [MCP](https://modelcontextprotocol.io) server, so agents like **Claude Code**, **Claude Desktop**
+or **Cursor** can edit your videos: open projects, add footage, cut, add overlays and titles, grade, look at
+frames and export. Everything happens live in Eddie's window, and every change is one undo step.
+
+1. In Eddie, open **Settings (⌘,) → AI Agents** and turn on **Let AI agents control Eddie**.
+2. Connect your agent — the Settings pane has buttons that copy the exact command or config:
+
+   ```sh
+   # Claude Code
+   claude mcp add eddie -- /Applications/Eddie.app/Contents/MacOS/eddie-mcp
+   ```
+
+   ```json
+   // Claude Desktop, Cursor and other MCP apps
+   { "mcpServers": { "eddie": { "command": "/Applications/Eddie.app/Contents/MacOS/eddie-mcp" } } }
+   ```
+
+3. Ask for an edit: *"Make a 15-second vertical cut of the clips in ~/Movies/trip, warm grade, add 'Day 1'
+   in a serif font and fade out at the end. Export it to my Desktop."*
+
+| Tool | What it does |
+|---|---|
+| `get_timeline` | The edit as text — clips c1…, overlays o1…, titles t1…, audio m1…, markers k1… |
+| `get_frame` | An image of the finished, graded frame at any time |
+| `list_projects` · `open_project` · `new_project` | Pick what to work on |
+| `add_media` | Add videos, photos or audio as clips, overlays, music, effects, voiceovers or to the bin |
+| `edit` | Every editing action: split, trim, move, speed, transitions, fades, titles, overlays, framing, Ken Burns, format, markers, reverse, freeze, audio clean-up, captions, beats… |
+| `set_grade` · `auto_grade` | Set the grade's knobs directly, or let Eddie's AI colorist grade |
+| `control` | Play, pause, seek, undo, redo, save |
+| `export` | Render with a codec, size and frame rate |
+
+The server (`eddie-mcp`, inside the app) talks to the running Eddie over a local socket that only your user
+account can open. If Eddie isn't running, it opens it. Nothing is reachable from the network.
+
+---
+
 ## Keyboard shortcuts
 
 | Key | Action | | Key | Action |
@@ -194,10 +233,12 @@ Eddie/
   Grade/      GradeRecipe (the ten knobs), CubeLUT, GradeRenderer, Metal kernel source, TitleRenderer
   Video/      GradeCompositor, Exporter + ExportSettings, Reverser, MediaCache (proxies, thumbnails)
   Audio/      AudioProcessor (normalize, noise reduction), BeatDetector, VoiceRecorder, Captioner
+  Agent/      MCP for outside agents: tool definitions, the socket server, the tool handlers
   Project/    Project model, ProjectCompiler (→ AVComposition), ProjectLibrary (saving)
   Analysis/   FrameStats (histograms, clipping, white balance)
   UI/         SwiftUI views: viewer, timeline, inspector, media bin, projects, export, settings
   Resources/  App icon, DJI D-Log M LUT
+EddieMCP/     eddie-mcp, the stdio MCP server agents launch (relays to the app)
 EddieTests/   ~100 XCTest cases with small video/audio fixtures
 docs/         Design notes
 project.yml   XcodeGen project definition

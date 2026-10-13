@@ -354,6 +354,16 @@ enum EditExecutor {
                     default: break
                     }
                     if var v = a.volume { if v > 1 { v /= 100 }; o.clip.volume = min(max(v, 0), 1); o.clip.audioMuted = v <= 0.001 }
+                    // Position, size and rotation right here (same meaning as the framing action).
+                    if a.size != nil || a.x != nil || a.y != nil || a.rotation != nil {
+                        var f = o.clip.transform
+                        if let z = a.size { f.scale = min(max(z, 0.05), 5) }
+                        if let x = a.x { f.x = min(max(x, -1), 1) }
+                        if let y = a.y { f.y = min(max(y, -1), 1) }
+                        if let r = a.rotation { f.rotation = r }
+                        o.clip.transform = f
+                        o.clip.keyframes = []
+                    }
                 }
                 log.append("Updated \(a.target ?? a.clip ?? "overlay")")
 
@@ -477,67 +487,15 @@ struct EditingAgent {
 
     Reply with one JSON object: {"reply": string, "actions": [action…], "done": boolean}.
     "reply" is one or two short, friendly sentences for the user about what you did (or why you can't).
-    Each action is an object with "type" and the fields it needs (leave other fields null):
-    - split: at — cut the clip under that time into two.
-    - trim: clip, keep_from, keep_to — keep only that part of the clip, in seconds from the clip's own start (0 … its length).
-    - delete: target — a clip (c2), title (t1) or song (m1).
-    - move: clip, to_position — 1 = first.
-    - duplicate: clip.
-    - speed: clip (or "all"), speed — 0.25 to 4.
-    - clip_volume: clip (or "all"), volume — 0 to 1 (0 mutes the clip's own sound).
-    - add_title: text, at, duration, style ("title" | "lowerThird" | "caption"), optional x and y (0–1, center of the \
-    text, y from the top), size (1 = normal, 0.3–4), rotation (degrees, clockwise), font ("System", "Rounded", "Serif", \
-    "Mono" or a font family like "Georgia", "Futura", "Avenir Next", "Didot", "Marker Felt"), color ("#RRGGBB"), weight \
-    ("regular" | "medium" | "bold" | "heavy"). Use \\n for a line break.
-    - edit_title: title, then any of the add_title fields to change.
-    - music: music, optional volume (0–1), at (timeline start), starts_at (seconds into the song), duration, fade_in, fade_out.
-    - preset: clip (or "all"), preset — one of Warm, Cool, Bright, Punchy, Soft, Vivid, Moody, Cinematic, Golden, Faded, Mono.
-    - color: clip (or "all"), instruction — hand off to the AI colorist for a proper grade ("natural", "warmer", "cinematic"…).
-    - seek: at — move the playhead to show the user the result.
-    - transition: clip (or "all" for every cut), kind ("crossDissolve" | "dipToBlack" | "wipe" | "slide" | "none"),     duration (0.2–3) — the transition INTO that clip from the one before.
-    - fade: fade_in (seconds, fade from black at the start; 0 removes), fade_out (seconds, fade to black at the end).
-    - clip_fade: clip (or overlay, or "all"), fade_in, fade_out — fade the clip's own sound in/out.
-    - format: aspect ("landscape" 16:9 | "portrait" 9:16 for Reels/TikTok/Shorts | "square" | "portrait4x5" | "auto"),     optional fill (true = crop to fill the frame, false = fit inside with black bars).
-    - framing: clip or overlay, any of size (zoom, 1 = normal), x and y (offset, -1…1 of the frame, y down), rotation.
-    - ken_burns: clip or overlay (or "all"), optional size (end zoom, e.g. 1.2) — a slow push-in.
-    - profile: clip or overlay (or "all"), profile ("dlogM" for DJI log footage | "normal" for phone/normal footage).
-    - overlay: target (o1…), optional at, duration, opacity (0–1), layout ("pip" | "full"), volume.
-    - marker: at, text.
-    - reverse: clip or overlay — play it backwards (toggles).
-    - freeze: at — hold that frame for 2 seconds (inserted there).
-    - clean_audio: target (a clip, overlay or song), kind ("normalize" | "noise") — even out loudness or remove background noise.
-    - captions: — transcribe the speech in the clips into captions (replaces earlier auto captions).
-    - beats: music — find the song's beat so cuts can line up with it.
+    \(EditActionSchema.guide)
 
-    Labels: c1, c2… are clips in their current order; o1… overlays; t1… titles; m1… songs, voiceovers and sound effects; k1… markers. Labels are renumbered every step, so always \
-    use the labels from the latest timeline you were shown. Do all you can in one step; you'll see the result and can fix \
-    anything. When the request is fully done, return no actions and done=true. If a request needs something you can't \
-    do (for example adding a new video or song file), say so in "reply".
+    Do all you can in one step; you'll see the result and can fix anything. When the request is fully done, return no \
+    actions and done=true. If a request needs something you can't do (for example adding a new video or song file), \
+    say so in "reply".
     """
 
     static let schema: [String: Any] = {
-        func nullable(_ type: String) -> [String: Any] { ["type": [type, "null"]] }
-        let fields: [String: [String: Any]] = [
-            "type": ["type": "string", "enum": ["split", "trim", "delete", "move", "duplicate", "speed", "clip_volume", "add_title",
-                                                "edit_title", "music", "preset", "color", "seek", "transition", "fade", "clip_fade",
-                                                "format", "framing", "ken_burns", "profile", "overlay", "marker", "reverse", "freeze",
-                                                "clean_audio", "captions", "beats"]],
-            "clip": nullable("string"), "title": nullable("string"), "music": nullable("string"), "target": nullable("string"),
-            "at": nullable("number"), "duration": nullable("number"), "keep_from": nullable("number"), "keep_to": nullable("number"),
-            "to_position": nullable("integer"), "speed": nullable("number"), "volume": nullable("number"),
-            "text": nullable("string"), "style": nullable("string"), "x": nullable("number"), "y": nullable("number"),
-            "size": nullable("number"), "rotation": nullable("number"), "font": nullable("string"), "color": nullable("string"),
-            "weight": nullable("string"), "starts_at": nullable("number"), "fade_in": nullable("number"),
-            "fade_out": nullable("number"), "preset": nullable("string"), "instruction": nullable("string"),
-            "kind": nullable("string"), "aspect": nullable("string"), "opacity": nullable("number"), "layout": nullable("string"),
-            "profile": nullable("string"), "fill": nullable("boolean"),
-        ]
-        let action: [String: Any] = [
-            "type": "object",
-            "properties": fields,
-            "required": Array(fields.keys).sorted(),
-            "additionalProperties": false,
-        ]
+        let action = EditActionSchema.action(strict: true)
         return [
             "type": "object",
             "properties": [

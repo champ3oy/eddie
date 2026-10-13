@@ -33,7 +33,7 @@ final class EditorModel: ObservableObject {
     let library: ProjectLibrary
     private var autosaveTask: Task<Void, Never>?
     private var lastSaved: Project?
-    private var loadingProject = false
+    private(set) var loadingProject = false
     /// The size the viewer renders at (smaller than the project when proxies are in use).
     @Published private(set) var renderSize = CGSize(width: 1920, height: 1080)
     /// The project's real frame size (what export uses).
@@ -65,6 +65,35 @@ final class EditorModel: ObservableObject {
     @Published var compare = false { didSet { pushState() } }
     @Published var split = 0.5 { didSet { if compare { pushState() } } }
     @Published private(set) var lut: CubeLUT { didSet { pushState(); invalidateThumbnails() } }
+    // MARK: AI agents (MCP)
+
+    /// "Let AI agents control Eddie": outside agents (Claude Code, Claude Desktop, Cursor…) can edit through the
+    /// `eddie-mcp` helper while this is on. Off by default.
+    @Published var agentControl = UserDefaults.standard.bool(forKey: "agentControl") {
+        didSet {
+            UserDefaults.standard.set(agentControl, forKey: "agentControl")
+            updateAgentServer()
+        }
+    }
+    @Published private(set) var agentServerError: String?
+
+    func updateAgentServer() {
+        agentServerError = nil
+        guard agentControl else { AgentServer.shared.stop(); return }
+        do {
+            try AgentServer.shared.start { tool, args in
+                await AgentTools.handle(tool, args, model: EditorModel.shared)
+            }
+        } catch {
+            agentServerError = "Couldn't start: \(error.localizedDescription)"
+        }
+    }
+
+    /// The helper agents run, inside this app.
+    static var mcpHelperPath: String {
+        Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/eddie-mcp").path
+    }
+
     /// Timeline zoom in points per second; nil means "fit the edit the next time there is one".
     /// Kept here (not in the view) so trimming or rebuilding the timeline view never rescales it.
     @Published var timelineScale: CGFloat?
@@ -1417,12 +1446,12 @@ final class EditorModel: ObservableObject {
             aiTask = nil
             // Color requests go through the colorist, which looks at the clip's frames.
             for work in colorWork { await runColor(work) }
-            for job in jobs { run(job) }
+            for job in jobs { perform(job) }
         }
     }
 
     /// Slow work the editing AI asked for.
-    private func run(_ job: EditJob) {
+    func perform(_ job: EditJob) {
         switch job {
         case .reverse(let id): toggleReverse(id)
         case .freeze(let at): freezeFrame(at: at)
@@ -1435,7 +1464,7 @@ final class EditorModel: ObservableObject {
         }
     }
 
-    private func runColor(_ work: ColorRequest) async {
+    func runColor(_ work: ColorRequest) async {
         let ids = work.clipIDs.filter { id in project.clips.contains { $0.id == id } }
         guard !ids.isEmpty else { return }
         let instruction = work.instruction
@@ -1451,6 +1480,19 @@ final class EditorModel: ObservableObject {
     }
 
     /// Graded frames spread across the timeline (what the viewer shows), for the editing assistant to look at.
+    /// The finished, graded frame at a timeline time, as JPEG (for outside agents to look at).
+    func frame(at time: Double, width: CGFloat) async -> Data? {
+        guard let item = player.currentItem, project.duration > 0 else { return nil }
+        let generator = AVAssetImageGenerator(asset: item.asset)
+        generator.videoComposition = item.videoComposition
+        generator.maximumSize = CGSize(width: width, height: width)
+        generator.requestedTimeToleranceBefore = CMTime(seconds: 0.05, preferredTimescale: 600)
+        generator.requestedTimeToleranceAfter = CMTime(seconds: 0.05, preferredTimescale: 600)
+        let t = min(max(0, time), max(0, project.duration - 0.04))
+        guard let (cg, _) = try? await generator.image(at: CMTime(seconds: t, preferredTimescale: 600)) else { return nil }
+        return NSBitmapImageRep(cgImage: cg).representation(using: .jpeg, properties: [.compressionFactor: 0.8])
+    }
+
     private func timelineFrames(count: Int) async -> [(time: Double, jpeg: Data)] {
         guard let item = player.currentItem, project.duration > 0 else { return [] }
         let generator = AVAssetImageGenerator(asset: item.asset)
