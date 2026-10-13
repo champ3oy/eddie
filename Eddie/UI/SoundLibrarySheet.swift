@@ -141,8 +141,8 @@ struct SoundLibrarySheet: View {
                     Text(s.license.label)
                         .font(.system(size: 9.5, weight: .bold))
                         .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(Capsule().fill(Color.white.opacity(s.license == .cc0 ? 0.08 : 0.16)))
-                        .help(s.license == .cc0 ? "Free to use, no credit needed" : "Free to use with a credit to the author (Eddie keeps it)")
+                        .background(Capsule().fill(Color.white.opacity(s.license.needsCredit ? 0.16 : 0.08)))
+                        .help(s.license.needsCredit ? "Free to use with a credit to the author (Eddie keeps it)" : "Free to use, no credit needed")
                 }
                 .font(.system(size: 10.5)).foregroundStyle(Ink.tertiary)
             }

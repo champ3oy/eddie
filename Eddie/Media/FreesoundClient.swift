@@ -21,15 +21,25 @@ enum Freesound {
         var credit: String { "“\(name)” by \(author) (\(page.absoluteString)) — \(license.label)" }
     }
 
-    enum License: String, Sendable {
-        case cc0, by
-        var label: String { self == .cc0 ? "CC0" : "CC BY 4.0" }
+    enum License: Hashable, Sendable {
+        case cc0
+        /// Attribution, with its version ("4.0", "3.0").
+        case by(String)
+        var label: String {
+            switch self {
+            case .cc0: "CC0"
+            case .by(let v): "CC BY \(v)"
+            }
+        }
+        var needsCredit: Bool { self != .cc0 }
         /// Freesound gives a license URL; anything that isn't CC0 or plain Attribution is dropped.
         init?(url: String) {
             let u = url.lowercased()
             if u.contains("publicdomain/zero") { self = .cc0 }
-            else if u.contains("/licenses/by/") { self = .by }
-            else { return nil }
+            else if let r = u.range(of: "/licenses/by/") {
+                let version = u[r.upperBound...].split(separator: "/").first.map(String.init) ?? "4.0"
+                self = .by(version)
+            } else { return nil }
         }
     }
 
@@ -61,7 +71,8 @@ enum Freesound {
         var c = URLComponents(string: "https://freesound.org/apiv2/search/text/")!
         c.queryItems = [
             URLQueryItem(name: "query", value: query.trimmingCharacters(in: .whitespaces)),
-            URLQueryItem(name: "filter", value: "duration:[0 TO 30]"),
+            // Freesound leaves out non-commercial sounds itself (fuller pages); `parse` double-checks.
+            URLQueryItem(name: "filter", value: #"duration:[0 TO 30] license:("Attribution" OR "Creative Commons 0")"#),
             URLQueryItem(name: "fields", value: "id,name,username,license,duration,previews,images,tags"),
             URLQueryItem(name: "page_size", value: "40"),
             URLQueryItem(name: "page", value: String(page)),
