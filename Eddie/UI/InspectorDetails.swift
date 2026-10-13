@@ -103,6 +103,11 @@ struct ClipDetails: View {
                     Row.slider("Opacity", value: "\(Int(overlay.opacity * 100))%",
                                Binding(get: { overlay.opacity }, set: { v in model.updateOverlay(clip.id) { $0.opacity = v } }),
                                0...1, reset: 1)
+                    PillMenu(label: "Blend", value: overlay.blend.label) {
+                        ForEach(BlendMode.allCases) { b in
+                            Button(b.label) { model.updateOverlay(clip.id, undo: .push) { $0.blend = b } }
+                        }
+                    }
                 } else {
                     PillMenu(label: isFirst ? "Start" : "Transition in",
                              value: clip.transitionIn.map { isFirst ? "Fade from black" : $0.kind.label } ?? (isFirst ? "Cut in" : "Cut")) {
@@ -136,6 +141,10 @@ struct ClipDetails: View {
                     }
                 }
             }
+
+            EffectsCard(clip: clip)
+            MaskCard(clip: clip)
+            ChromaKeyCard(clip: clip)
 
             GlassCard(title: "Framing" + (clip.keyframes.isEmpty ? "" : " · animated"), trailing: AnyView(
                 Button { withAnimation(.easeOut(duration: 0.18)) { framingOpen.toggle() } } label: {
@@ -243,9 +252,151 @@ struct ProjectSection: View {
                 Row.segmented([true, false], selected: model.project.format.fill, title: { $0 ? "Fill frame" : "Fit inside" }) { f in
                     model.setFormat { $0.fill = f }
                 }
+                if !model.project.format.fill {
+                    Row.segmented([false, true], selected: model.project.format.blurBackground,
+                                  title: { $0 ? "Blurred background" : "Black bars" }) { b in
+                        model.setFormat { $0.blurBackground = b }
+                    }
+                }
             }
             Row.slider("Fade out at the end", value: model.project.fadeOut > 0 ? String(format: "%.1f s", model.project.fadeOut) : "Off",
                        Binding(get: { model.project.fadeOut }, set: { model.setFadeOut($0) }), 0...5, reset: 0)
+        }
+    }
+}
+
+// MARK: - Effects, mask, green screen
+
+/// Looks on top of the grade: add from the menu, set each one's amount, remove.
+struct EffectsCard: View {
+    @EnvironmentObject var model: EditorModel
+    let clip: ClipItem
+    var body: some View {
+        GlassCard(title: "Effects", trailing: AnyView(
+            Menu {
+                ForEach(ClipEffect.Kind.allCases) { k in
+                    Button { model.addEffect(k, to: clip.id) } label: { Label(k.label, systemImage: k.icon) }
+                        .disabled(clip.effects.contains { $0.kind == k })
+                }
+            } label: { Image(systemName: "plus").font(.system(size: 10, weight: .bold)).foregroundStyle(Ink.secondary) }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .help("Add an effect")
+        )) {
+            if clip.effects.isEmpty {
+                Text("Blur, grain, glitch, VHS, light leaks, shake and more — add with +.")
+                    .font(.system(size: 11)).foregroundStyle(Ink.tertiary)
+            }
+            ForEach(clip.effects) { e in
+                HStack(spacing: 6) {
+                    if e.kind == .mirror {
+                        Label(e.kind.label, systemImage: e.kind.icon).font(.system(size: 11.5)).foregroundStyle(Ink.primary)
+                            .frame(maxWidth: .infinity, alignment: .leading).frame(height: 28)
+                    } else {
+                        PillSlider(label: e.kind.label, value: "\(Int((e.amount * 100).rounded()))%",
+                                   amount: Binding(get: { e.amount }, set: { v in
+                                       model.updateClip(clip.id) { c in if let i = c.effects.firstIndex(where: { $0.id == e.id }) { c.effects[i].amount = v } }
+                                   }), range: 0...1, reset: 0.5)
+                    }
+                    Button { model.updateClip(clip.id, undo: .push) { $0.effects.removeAll { $0.id == e.id } } } label: {
+                        Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).frame(width: 18, height: 18)
+                    }
+                    .buttonStyle(.plain).foregroundStyle(Ink.secondary).help("Remove \(e.kind.label)")
+                }
+            }
+        }
+    }
+}
+
+/// Cut the clip to a circle, rectangle or along a line, with a soft edge.
+struct MaskCard: View {
+    @EnvironmentObject var model: EditorModel
+    let clip: ClipItem
+
+    private func bind(_ key: WritableKeyPath<ClipMask, Double>) -> Binding<Double> {
+        Binding(get: { clip.mask?[keyPath: key] ?? 0 }, set: { v in model.updateClip(clip.id) { $0.mask?[keyPath: key] = v } })
+    }
+
+    var body: some View {
+        GlassCard(title: "Mask", trailing: AnyView(
+            Toggle("", isOn: Binding(get: { clip.mask != nil }, set: { on in
+                model.updateClip(clip.id, undo: .push) { $0.mask = on ? ClipMask() : nil }
+            })).toggleStyle(.switch).controlSize(.mini).labelsHidden()
+        )) {
+            if let m = clip.mask {
+                Row.segmented(ClipMask.Shape.allCases, selected: m.shape, title: { $0.label }) { shape in
+                    model.updateClip(clip.id, undo: .push) { $0.mask?.shape = shape }
+                }
+                HStack(spacing: 8) {
+                    Row.slider("X", value: "\(Int((m.centerX * 100).rounded()))", bind(\.centerX), 0...1, reset: 0.5)
+                    Row.slider("Y", value: "\(Int((m.centerY * 100).rounded()))", bind(\.centerY), 0...1, reset: 0.5)
+                }
+                if m.shape != .linear {
+                    HStack(spacing: 8) {
+                        Row.slider("W", value: "\(Int((m.width * 100).rounded()))%", bind(\.width), 0.05...1.5, reset: 0.7)
+                        Row.slider("H", value: "\(Int((m.height * 100).rounded()))%", bind(\.height), 0.05...1.5, reset: 0.7)
+                    }
+                }
+                HStack(spacing: 8) {
+                    Row.slider("Soft", value: "\(Int((m.feather * 100).rounded()))%", bind(\.feather), 0...1, reset: 0.15)
+                    Row.slider("Turn", value: "\(Int(m.rotation.rounded()))°", bind(\.rotation), -180...180, origin: 0, reset: 0)
+                }
+                Toggle(isOn: Binding(get: { m.invert }, set: { v in model.updateClip(clip.id, undo: .push) { $0.mask?.invert = v } })) {
+                    Text("Invert (keep the outside)").font(.system(size: 11.5)).foregroundStyle(Ink.primary)
+                }
+                .toggleStyle(.switch).controlSize(.mini)
+            } else {
+                Text("Show only part of the picture — a circle, a box, or one side of a line.")
+                    .font(.system(size: 11)).foregroundStyle(Ink.tertiary)
+            }
+        }
+    }
+}
+
+/// Green screen: remove a color (green by default) so what's underneath shows through.
+struct ChromaKeyCard: View {
+    @EnvironmentObject var model: EditorModel
+    let clip: ClipItem
+
+    private func bind(_ key: WritableKeyPath<ChromaKey, Double>) -> Binding<Double> {
+        Binding(get: { clip.chromaKey?[keyPath: key] ?? 0 }, set: { v in model.updateClip(clip.id) { $0.chromaKey?[keyPath: key] = v } })
+    }
+
+    var body: some View {
+        GlassCard(title: "Green screen", trailing: AnyView(
+            Toggle("", isOn: Binding(get: { clip.chromaKey != nil }, set: { on in
+                model.updateClip(clip.id, undo: .push) { $0.chromaKey = on ? ChromaKey() : nil }
+            })).toggleStyle(.switch).controlSize(.mini).labelsHidden()
+        )) {
+            if let k = clip.chromaKey {
+                HStack(spacing: 8) {
+                    Text("Key color").font(.system(size: 11.5)).foregroundStyle(Ink.primary)
+                    Spacer()
+                    ForEach(["#00FF00", "#0047FF"], id: \.self) { hex in
+                        Button { model.updateClip(clip.id, undo: .push) { $0.chromaKey?.color = hex } } label: {
+                            Circle().fill(Color(nsColor: TitleRenderer.color(hex))).frame(width: 16, height: 16)
+                                .overlay(Circle().strokeBorder(Color.white.opacity(k.color == hex ? 0.9 : 0), lineWidth: 2))
+                        }
+                        .buttonStyle(.plain).help(hex == "#00FF00" ? "Green" : "Blue")
+                    }
+                    ColorPicker("", selection: Binding(
+                        get: { Color(nsColor: TitleRenderer.color(k.color)) },
+                        set: { c in
+                            let ns = NSColor(c).usingColorSpace(.sRGB) ?? .green
+                            let hex = String(format: "#%02X%02X%02X", Int(ns.redComponent * 255), Int(ns.greenComponent * 255), Int(ns.blueComponent * 255))
+                            model.updateClip(clip.id) { $0.chromaKey?.color = hex }
+                        }), supportsOpacity: false).labelsHidden().frame(width: 30).help("Any color")
+                }
+                Row.slider("Strength", value: "\(Int((k.tolerance * 100).rounded()))%", bind(\.tolerance), 0...1, reset: 0.35)
+                Row.slider("Edge softness", value: "\(Int((k.softness * 100).rounded()))%", bind(\.softness), 0...1, reset: 0.15)
+                Toggle(isOn: Binding(get: { k.despill }, set: { v in model.updateClip(clip.id, undo: .push) { $0.chromaKey?.despill = v } })) {
+                    Text("Remove green spill from edges").font(.system(size: 11.5)).foregroundStyle(Ink.primary)
+                }
+                .toggleStyle(.switch).controlSize(.mini)
+            } else {
+                Text("Make a green (or any) background transparent — usually on an overlay above other footage.")
+                    .font(.system(size: 11)).foregroundStyle(Ink.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 }

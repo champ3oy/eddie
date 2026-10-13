@@ -332,7 +332,7 @@ final class EditorModel: ObservableObject {
                 + "\(String(describing: c.transitionIn))|\(c.audioFadeIn)|\(c.audioFadeOut)|\(String(describing: c.audioOverride))|\(c.reversed)|\(String(describing: c.reversedURL))"
         }
         return "\(p.duckUnderMusic)|\(p.fadeOut)|\(p.format.aspect)|\(p.mutedLanes.sorted())#" + p.clips.map(clipKey).joined(separator: ";")
-            + "#" + p.overlays.map { "\(clipKey($0.clip))@\($0.start)" }.joined(separator: ";")
+            + "#" + p.overlays.map { "\(clipKey($0.clip))@\($0.start)L\($0.lane)" }.joined(separator: ";")
             + "#" + p.music.map { "\($0.id)|\($0.playURL.path)|\($0.start)|\($0.sourceStart)|\($0.sourceEnd)|\($0.volume)|\($0.fadeIn)|\($0.fadeOut)|\($0.kind)" }.joined(separator: ";")
     }
 
@@ -1421,6 +1421,75 @@ final class EditorModel: ObservableObject {
                 alert = "Couldn't start recording: \(error.localizedDescription)"
             }
         }
+    }
+
+    // MARK: Stickers, effects, lanes
+
+    static let stickerEmoji = ["😀", "😂", "🥹", "😍", "🤩", "😎", "🥳", "😮", "😱", "🤯", "😭", "😡", "🙌", "👏", "👍", "👎",
+                               "🙏", "💪", "👀", "🔥", "✨", "⭐️", "🌟", "💥", "💯", "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤",
+                               "🎉", "🎊", "🎈", "🎁", "🏆", "🥇", "🎬", "📸", "🎵", "🎧", "☀️", "🌙", "🌈", "⚡️", "❄️", "🌊",
+                               "🍕", "☕️", "🍿", "🚀", "✈️", "🏔️", "🏖️", "🌴", "🐶", "🐱", "➡️", "⬆️", "✅", "❌", "❓", "❗️"]
+
+    /// Puts an emoji sticker on an overlay lane at the playhead (small, centered; move it on the video).
+    func addSticker(_ emoji: String) {
+        guard hasProject else { return }
+        do {
+            let url = try Self.stickerImage(emoji)
+            try loadPhoto(url)
+            var c = ClipItem(url: url, sourceStart: 0, sourceEnd: 3)
+            c.isPhoto = true
+            c.profile = .normal
+            c.audioMuted = true
+            c.transform = Transform2D(scale: 0.22)
+            let start = min(clock.time, max(0, project.duration - 0.5))
+            let lane = freeOverlayLane(from: start, to: start + c.duration)
+            let item = OverlayItem(clip: c, start: start, lane: lane)
+            mutate(.push) { $0.overlays.append(item) }
+            selection = item.id
+        } catch {
+            alert = "Couldn't make that sticker: \(error.localizedDescription)"
+        }
+    }
+
+    /// The first overlay lane with nothing in the way between two times.
+    func freeOverlayLane(from a: Double, to b: Double) -> Int {
+        var lane = 0
+        while project.overlays.contains(where: { $0.lane == lane && $0.start < b && $0.end > a }) { lane += 1 }
+        return lane
+    }
+
+    /// A 512 px PNG of an emoji in Eddie's media folder (made once per emoji).
+    static func stickerImage(_ emoji: String) throws -> URL {
+        let name = emoji.unicodeScalars.map { String($0.value, radix: 16) }.joined(separator: "-")
+        let url = AudioProcessor.mediaFolder.appendingPathComponent("sticker-\(name).png")
+        if FileManager.default.fileExists(atPath: url.path) { return url }
+        let size = 512
+        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: size, pixelsHigh: size, bitsPerSample: 8,
+                                         samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+                                         bytesPerRow: 0, bitsPerPixel: 0) else { throw CocoaError(.fileWriteUnknown) }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        let text = NSAttributedString(string: emoji, attributes: [.font: NSFont.systemFont(ofSize: 400)])
+        let b = text.boundingRect(with: NSSize(width: 1000, height: 1000), options: [.usesLineFragmentOrigin])
+        text.draw(at: NSPoint(x: (CGFloat(size) - b.width) / 2 - b.minX, y: (CGFloat(size) - b.height) / 2 - b.minY))
+        NSGraphicsContext.restoreGraphicsState()
+        guard let png = rep.representation(using: .png, properties: [:]) else { throw CocoaError(.fileWriteUnknown) }
+        try png.write(to: url)
+        return url
+    }
+
+    func addEffect(_ kind: ClipEffect.Kind, to id: UUID? = nil) {
+        updateClip(id, undo: .push) { c in
+            if !c.effects.contains(where: { $0.kind == kind }) { c.effects.append(ClipEffect(kind: kind, amount: kind == .mirror ? 1 : 0.5)) }
+        }
+    }
+
+    func toggleLaneHidden(_ lane: String) {
+        mutate(.push) { p in if p.hiddenLanes.contains(lane) { p.hiddenLanes.remove(lane) } else { p.hiddenLanes.insert(lane) } }
+    }
+
+    func toggleLaneLocked(_ lane: String) {
+        mutate(.push) { p in if p.lockedLanes.contains(lane) { p.lockedLanes.remove(lane) } else { p.lockedLanes.insert(lane) } }
     }
 
     // MARK: Media bin

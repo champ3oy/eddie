@@ -17,6 +17,12 @@ final class GradeState: @unchecked Sendable {
         /// Clips by id — framing, keyframes, source profile.
         var clips: [UUID: ClipItem] = [:]
         var overlayOpacity: [UUID: Double] = [:]
+        var overlayBlend: [UUID: BlendMode] = [:]
+        var overlayLane: [UUID: Int] = [:]
+        /// Picture lanes switched off ("video", "titles", "captions", "overlay0"…).
+        var hiddenLanes: Set<String> = []
+        /// Blurred copy of the clip behind clips that fit inside the frame.
+        var blurBackground = false
         /// Clips of another shape fill the frame (true) or fit inside it (false).
         var fill = false
         /// Fade to black at the very end (seconds) and where the end is.
@@ -149,7 +155,8 @@ final class GradeCompositor: NSObject, AVVideoCompositing {
         } else {
             image = Self.compose(instruction, request: request, snap: snap, mode: snap.mode, size: size, now: now)
         }
-        for title in snap.titles where now >= title.start && now < title.end {
+        for title in snap.titles where now >= title.start && now < title.end
+            && !snap.hiddenLanes.contains(title.isCaption ? "captions" : "titles") {
             if let overlay = TitleRenderer.overlay(title, renderSize: size, at: now) {
                 image = overlay.composited(over: image)
             }
@@ -184,6 +191,8 @@ final class GradeCompositor: NSObject, AVVideoCompositing {
                 continue
             }
             let clip = layer.clipID.flatMap { snap.clips[$0] }
+            let lane = layer.clipID.flatMap { snap.overlayLane[$0] } ?? 0
+            if snap.hiddenLanes.contains(layer.role == .overlay ? Project.overlayLane(lane) : "video") { continue }
             let local = now - layer.start
             let framing = clip?.transform(at: local) ?? .identity
             let profile = clip?.profile ?? (layer.photoURL != nil ? .normal : .dlogM)
@@ -191,7 +200,18 @@ final class GradeCompositor: NSObject, AVVideoCompositing {
             source = crop(source, framing)
             var picture = GradeRenderer.shared.render(source, recipe: snap.recipe(for: layer.clipID), lut: snap.lut,
                                                       mode: mode, applyLUT: profile == .dlogM)
+            if let key = clip?.chromaKey { picture = VisualEffects.chromaKey(picture, key) }
+            if let effects = clip?.effects, !effects.isEmpty { picture = VisualEffects.apply(effects, to: picture, time: now) }
+            if let m = clip?.mask { picture = VisualEffects.mask(picture, m) }
+            let fits = layer.role == .main && !snap.fill
+            var backdrop: CIImage?
+            if fits && snap.blurBackground { backdrop = VisualEffects.blurredFill(picture, size: size) }
             picture = place(picture, framing, in: size, fill: layer.role == .overlay ? false : snap.fill)
+            if let effects = clip?.effects {
+                let shake = VisualEffects.shakeOffset(effects, time: now, size: size)
+                if shake != .zero { picture = picture.transformed(by: CGAffineTransform(translationX: shake.x, y: shake.y)) }
+            }
+            if let b = backdrop { picture = picture.composited(over: b) }
 
             var opacity = layer.role == .overlay ? (layer.clipID.flatMap { snap.overlayOpacity[$0] } ?? 1) : 1
             var brightness = 1.0
@@ -215,7 +235,10 @@ final class GradeCompositor: NSObject, AVVideoCompositing {
             }
             if brightness < 0.999 { picture = dim(picture, by: brightness) }
             if opacity < 0.999 { picture = fade(picture, to: opacity) }
-            if opacity > 0.001 { canvas = picture.composited(over: canvas) }
+            if opacity > 0.001 {
+                let mode = layer.role == .overlay ? (layer.clipID.flatMap { snap.overlayBlend[$0] } ?? .normal) : .normal
+                canvas = VisualEffects.blend(picture, over: canvas, mode: mode)
+            }
         }
         return canvas
     }

@@ -51,8 +51,11 @@ struct TimelineView: View {
 
     /// Songs, voiceovers and effects stack on as many audio lanes as they use.
     private var audioLanes: Int { max(1, (model.project.music.map(\.lane).max() ?? 0) + 1) }
+    /// Overlays stack on as many lanes as they use; higher lanes draw on top.
+    private var overlayLanes: Int { max(1, (model.project.overlays.map(\.lane).max() ?? 0) + 1) }
+    private var overlayLanesHeight: CGFloat { CGFloat(overlayLanes) * overlayHeight + CGFloat(overlayLanes - 1) * gap }
     private var musicLanesHeight: CGFloat { CGFloat(audioLanes) * musicHeight + CGFloat(audioLanes - 1) * gap }
-    private var lanesHeight: CGFloat { titleHeight * 2 + overlayHeight + gradeHeight + videoHeight + audioHeight + musicLanesHeight + gap * 6 }
+    private var lanesHeight: CGFloat { titleHeight * 2 + overlayLanesHeight + gradeHeight + videoHeight + audioHeight + musicLanesHeight + gap * 6 }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -237,6 +240,8 @@ struct TimelineView: View {
         tool("rectangle.on.rectangle", "Add overlay — B-roll or picture-in-picture (⇧⌘I)") { Panels.addOverlay(model) }
             .demoAnchor("tool-addOverlay")
             .disabled(!model.hasProject)
+        StickerButton()
+            .disabled(!model.hasProject)
         Menu {
             Button("Add Music…") { Panels.addMusic(model) }
             Button("Add Sound Effects…") { Panels.addMusic(model, kind: .effect) }
@@ -360,21 +365,57 @@ struct TimelineView: View {
 
     private var gutterIcons: some View {
         VStack(spacing: gap) {
-            Image(systemName: "textformat").frame(height: titleHeight)
-            Image(systemName: "captions.bubble").frame(height: titleHeight)
-            Image(systemName: "rectangle.on.rectangle").frame(height: overlayHeight)
+            laneIcon("textformat", key: "titles", name: "titles", height: titleHeight)
+            laneIcon("captions.bubble", key: "captions", name: "captions", height: titleHeight)
+            ForEach((0..<overlayLanes).reversed(), id: \.self) { i in
+                laneIcon("rectangle.on.rectangle", key: Project.overlayLane(i), name: "overlay lane \(i + 1)", height: overlayHeight)
+            }
             Image(systemName: "wand.and.stars").frame(height: gradeHeight)
-            Image(systemName: "film").frame(height: videoHeight)
+            laneIcon("film", key: "video", name: "the video", height: videoHeight)
             laneMute(Project.clipSoundLane, icon: "speaker.wave.2", name: "the videos' own sound")
                 .frame(height: audioHeight)
+                .overlay(alignment: .bottomTrailing) { lockBadge("clipsound") }
+                .contextMenu { lockButton("clipsound") }
             ForEach(0..<audioLanes, id: \.self) { i in
                 laneMute(Project.audioLane(i), icon: "music.note", name: "this audio lane")
                     .frame(height: musicHeight)
+                    .overlay(alignment: .bottomTrailing) { lockBadge(Project.audioLane(i)) }
+                    .contextMenu { lockButton(Project.audioLane(i)) }
             }
         }
         .font(.system(size: 13))
         .foregroundStyle(Ink.secondary)
         .frame(width: gutter)
+    }
+
+    /// A picture lane's icon: right-click to hide it (not drawn in playback or export) or lock it.
+    private func laneIcon(_ symbol: String, key: String, name: String, height: CGFloat) -> some View {
+        let hidden = model.project.hiddenLanes.contains(key)
+        return Image(systemName: hidden ? "eye.slash" : symbol)
+            .foregroundStyle(hidden ? Ink.tertiary : Ink.secondary)
+            .frame(width: gutter - 8, height: height)
+            .overlay(alignment: .bottomTrailing) { lockBadge(key) }
+            .contentShape(Rectangle())
+            .contextMenu {
+                Button(hidden ? "Show \(name.capitalized)" : "Hide \(name.capitalized)") { model.toggleLaneHidden(key) }
+                lockButton(key)
+            }
+            .help("\(name.capitalized) — right-click to hide or lock")
+    }
+
+    @ViewBuilder private func lockBadge(_ key: String) -> some View {
+        if model.project.lockedLanes.contains(key) {
+            Image(systemName: "lock.fill").font(.system(size: 7, weight: .bold)).foregroundStyle(Ink.secondary).padding(.trailing, 4)
+        }
+    }
+
+    private func lockButton(_ key: String) -> some View {
+        Button(model.project.lockedLanes.contains(key) ? "Unlock Lane" : "Lock Lane") { model.toggleLaneLocked(key) }
+    }
+
+    /// Hidden lanes are dimmed; locked lanes can't be clicked or dragged.
+    private func laneState(_ key: String) -> (hidden: Bool, locked: Bool) {
+        (model.project.hiddenLanes.contains(key), model.project.lockedLanes.contains(key))
     }
 
     /// A lane's speaker button: click to switch that lane's sound off (shown crossed out) or back on.
@@ -397,7 +438,7 @@ struct TimelineView: View {
         let titleTop = rulerHeight + 6
         let captionTop = titleTop + titleHeight + gap
         let overlayTop = captionTop + titleHeight + gap
-        let laneTop = overlayTop + overlayHeight + gap
+        let laneTop = overlayTop + overlayLanesHeight + gap
         let playheadX = CGFloat(clock.time) * pps
         return ZStack(alignment: .topLeading) {
             Ruler(duration: model.project.duration, pps: pps, height: rulerHeight)
@@ -425,14 +466,21 @@ struct TimelineView: View {
 
             // Titles lane
             ForEach(model.project.titles) { item in
+                let st = laneState(item.isCaption ? "captions" : "titles")
                 titleBlock(item, pps: pps)
+                    .opacity(st.hidden ? 0.35 : 1)
+                    .allowsHitTesting(!st.locked)
                     .offset(y: item.isCaption ? captionTop : titleTop)
             }
 
             // Overlay lane (B-roll, picture-in-picture)
             ForEach(model.project.overlays) { item in
+                let st = laneState(Project.overlayLane(item.lane))
                 overlayBlock(item, pps: pps)
-                    .offset(y: overlayTop)
+                    .opacity(st.hidden ? 0.35 : 1)
+                    .allowsHitTesting(!st.locked)
+                    // Lane 0 is the bottom overlay lane (nearest the video); higher lanes stack above it.
+                    .offset(y: overlayTop + CGFloat(overlayLanes - 1 - item.lane) * (overlayHeight + gap))
             }
 
             // Grade lane
@@ -445,7 +493,10 @@ struct TimelineView: View {
 
             // Video lane
             ForEach(Array(model.project.clips.enumerated()), id: \.element.id) { i, clip in
+                let st = laneState("video")
                 videoBlock(clip, x: clipX(clip, pps: pps), pps: pps)
+                    .opacity(st.hidden ? 0.35 : 1)
+                    .allowsHitTesting(!st.locked)
                     .offset(y: laneTop + gradeHeight + gap)
                     .zIndex(dragID == clip.id ? 2 : 0)
             }
@@ -481,6 +532,7 @@ struct TimelineView: View {
             // Music lane
             ForEach(model.project.music) { item in
                 musicBlock(item, pps: pps)
+                    .allowsHitTesting(!laneState(Project.audioLane(item.lane)).locked)
                     .offset(y: laneTop + gradeHeight + videoHeight + audioHeight + gap * 3 + CGFloat(item.lane) * (musicHeight + gap))
             }
 
@@ -828,7 +880,9 @@ struct TimelineView: View {
                 if overlayOrigin == nil { overlayOrigin = item; model.beginInteraction(); model.selection = item.id }
                 guard let o = overlayOrigin else { return }
                 let start = snappedMove(o.start + Double(v.translation.width / pps), length: o.clip.duration, pps: pps, excluding: item.id)
-                model.updateOverlay(item.id, undo: .none) { $0.start = start }
+                // Dragging up moves it to a higher lane (on top); one past the top makes a new lane.
+                let lane = min(overlayLanes, max(0, o.lane - Int((v.translation.height / (overlayHeight + gap)).rounded())))
+                model.updateOverlay(item.id, undo: .none) { $0.start = start; $0.lane = lane }
             }
             .onEnded { _ in overlayOrigin = nil; snapGuide = nil; model.endInteraction() })
         .contextMenu {
@@ -1321,5 +1375,28 @@ struct RecordButton: View {
             .frame(minWidth: 26, minHeight: 22)
         }
         .help(recorder.isRecording ? "Stop recording" : "Record a voiceover from the playhead")
+    }
+}
+
+/// Stickers: pick an emoji and it lands on an overlay at the playhead.
+struct StickerButton: View {
+    @EnvironmentObject var model: EditorModel
+    @State private var open = false
+    var body: some View {
+        Button { open.toggle() } label: {
+            Image(systemName: "face.smiling").font(.system(size: 13)).frame(width: 26, height: 22)
+        }
+        .help("Add a sticker")
+        .popover(isPresented: $open, arrowEdge: .bottom) {
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(34), spacing: 4), count: 8), spacing: 4) {
+                ForEach(EditorModel.stickerEmoji, id: \.self) { e in
+                    Button { model.addSticker(e); open = false } label: {
+                        Text(e).font(.system(size: 24)).frame(width: 34, height: 34).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(10)
+        }
     }
 }

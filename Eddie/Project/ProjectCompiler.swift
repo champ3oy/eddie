@@ -152,7 +152,8 @@ enum ProjectCompiler {
 
         // Overlays, cut at the end of the video.
         var overlayTracks: [(OverlayItem, AVMutableCompositionTrack, AVMutableCompositionTrack)] = []
-        for o in project.overlays where o.start < total - 0.05 {
+        let byLane = project.overlays.enumerated().sorted { ($0.element.lane, $0.offset) < ($1.element.lane, $1.offset) }.map(\.element)
+        for o in byLane where o.start < total - 0.05 {
             var item = o
             if item.end > total { item.clip.sourceEnd = item.clip.sourceStart + (total - item.start) * item.clip.speed }
             guard let vt = newTrack(.video), let st = newTrack(.audio) else { continue }
@@ -320,10 +321,15 @@ enum ProjectCompiler {
     /// The grade state for a project (per-clip grades, framing, overlays, end fade).
     static func snapshot(for project: Project, lut: CubeLUT, mode: ViewMode = .graded, split: Double? = nil) -> GradeState.Snapshot {
         var recipes: [UUID: GradeRecipe] = [:], clips: [UUID: ClipItem] = [:], opacity: [UUID: Double] = [:]
+        var blend: [UUID: BlendMode] = [:], lanes: [UUID: Int] = [:]
         for c in project.clips { recipes[c.id] = c.effectiveRecipe; clips[c.id] = c }
-        for o in project.overlays { recipes[o.id] = o.clip.effectiveRecipe; clips[o.id] = o.clip; opacity[o.id] = o.opacity }
+        for o in project.overlays {
+            recipes[o.id] = o.clip.effectiveRecipe; clips[o.id] = o.clip; opacity[o.id] = o.opacity
+            blend[o.id] = o.blend; lanes[o.id] = o.lane
+        }
         return GradeState.Snapshot(recipe: .neutral, lut: lut, mode: mode, split: split, recipes: recipes, titles: project.titles,
-                                   clips: clips, overlayOpacity: opacity, fill: project.format.fill,
-                                   fadeOut: project.fadeOut, duration: project.duration)
+                                   clips: clips, overlayOpacity: opacity, overlayBlend: blend, overlayLane: lanes,
+                                   hiddenLanes: project.hiddenLanes, blurBackground: project.format.blurBackground,
+                                   fill: project.format.fill, fadeOut: project.fadeOut, duration: project.duration)
     }
 }

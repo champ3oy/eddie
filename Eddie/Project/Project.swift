@@ -89,6 +89,10 @@ struct ClipItem: Identifiable, Codable, Equatable {
     var audioOverride: URL? = nil
     /// A reversed copy of the source, used when the clip plays backwards.
     var reversedURL: URL? = nil
+    /// Looks on top of the grade (blur, grain, glitch…), in order.
+    var effects: [ClipEffect] = []
+    var mask: ClipMask? = nil
+    var chromaKey: ChromaKey? = nil
     var reversed = false
 
     static let speeds: [Double] = [0.25, 0.5, 1, 1.5, 2, 4]
@@ -138,6 +142,9 @@ extension ClipItem {
         audioOverride = try c.decodeIfPresent(URL.self, forKey: .audioOverride)
         reversedURL = try c.decodeIfPresent(URL.self, forKey: .reversedURL)
         reversed = try c.decodeIfPresent(Bool.self, forKey: .reversed) ?? false
+        effects = try c.decodeIfPresent([ClipEffect].self, forKey: .effects) ?? []
+        mask = try c.decodeIfPresent(ClipMask.self, forKey: .mask)
+        chromaKey = try c.decodeIfPresent(ChromaKey.self, forKey: .chromaKey)
     }
 }
 
@@ -147,8 +154,28 @@ struct OverlayItem: Identifiable, Codable, Equatable {
     /// Where it starts on the timeline.
     var start: Double
     var opacity = 1.0
+    var blend = BlendMode.normal
+    /// Which overlay lane it's on; higher lanes draw on top.
+    var lane = 0
     var id: UUID { clip.id }
     var end: Double { start + clip.duration }
+
+    init(clip: ClipItem, start: Double, opacity: Double = 1, blend: BlendMode = .normal, lane: Int = 0) {
+        self.clip = clip
+        self.start = start
+        self.opacity = opacity
+        self.blend = blend
+        self.lane = lane
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        clip = try c.decode(ClipItem.self, forKey: .clip)
+        start = try c.decode(Double.self, forKey: .start)
+        opacity = try c.decodeIfPresent(Double.self, forKey: .opacity) ?? 1
+        blend = try c.decodeIfPresent(BlendMode.self, forKey: .blend) ?? .normal
+        lane = try c.decodeIfPresent(Int.self, forKey: .lane) ?? 0
+    }
 }
 
 // MARK: - Audio, titles, markers
@@ -378,6 +405,21 @@ struct ProjectFormat: Codable, Equatable {
     var aspect = Aspect.auto
     /// Clips of another shape fill the frame (cropping) instead of fitting inside it (bars).
     var fill = true
+    /// What shows around clips that fit inside the frame: black bars or a blurred copy of the clip.
+    var blurBackground = false
+
+    init(aspect: Aspect = .auto, fill: Bool = true, blurBackground: Bool = false) {
+        self.aspect = aspect
+        self.fill = fill
+        self.blurBackground = blurBackground
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        aspect = try c.decodeIfPresent(Aspect.self, forKey: .aspect) ?? .auto
+        fill = try c.decodeIfPresent(Bool.self, forKey: .fill) ?? true
+        blurBackground = try c.decodeIfPresent(Bool.self, forKey: .blurBackground) ?? false
+    }
 
     /// Frame size for a project whose first clip is `source` (its long side is kept).
     func renderSize(source: CGSize) -> CGSize {
@@ -407,6 +449,11 @@ struct Project: Codable, Equatable {
     /// Lanes switched off with their speaker button: "clips" (the videos' own sound), "overlays",
     /// or "audio0", "audio1"… (song/voiceover/effect lanes). Applies to playback and export.
     var mutedLanes: Set<String> = []
+    /// Picture lanes switched off ("video", "titles", "captions", "overlay0"…) — not drawn in playback or export.
+    var hiddenLanes: Set<String> = []
+    /// Lanes that can't be changed on the timeline (same keys, plus "clipsound" and "audio0"…).
+    var lockedLanes: Set<String> = []
+    static func overlayLane(_ i: Int) -> String { "overlay\(i)" }
 
     static let clipSoundLane = "clips"
     static let overlaySoundLane = "overlays"
@@ -433,6 +480,8 @@ struct Project: Codable, Equatable {
         duckUnderMusic = try c.decodeIfPresent(Bool.self, forKey: .duckUnderMusic) ?? true
         bin = try c.decodeIfPresent([URL].self, forKey: .bin) ?? []
         mutedLanes = try c.decodeIfPresent(Set<String>.self, forKey: .mutedLanes) ?? []
+        hiddenLanes = try c.decodeIfPresent(Set<String>.self, forKey: .hiddenLanes) ?? []
+        lockedLanes = try c.decodeIfPresent(Set<String>.self, forKey: .lockedLanes) ?? []
     }
 
     // MARK: Media
