@@ -586,7 +586,7 @@ struct BackgroundWork: View {
         if model.captioning { parts.append("Making captions") }
         if let w = model.captionWork { parts.append(w.trimmingCharacters(in: CharacterSet(charactersIn: "…"))) }
         if !model.audioJobs.isEmpty { parts.append("Processing audio") }
-        if model.giphyDownloads > 0 { parts.append("Downloading from GIPHY") }
+        if model.libraryDownloads > 0 { parts.append("Downloading") }
         if activity.proxies > 0 { parts.append(activity.proxies == 1 ? "Preparing smooth playback" : "Preparing smooth playback (\(activity.proxies) videos)") }
         return parts.isEmpty ? nil : parts.joined(separator: " · ") + "…"
     }

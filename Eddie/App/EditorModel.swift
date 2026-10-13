@@ -505,7 +505,7 @@ final class EditorModel: ObservableObject {
         }
     }
 
-    func addMusic(_ url: URL, at time: Double? = nil, kind: MusicItem.Kind = .music) {
+    func addMusic(_ url: URL, at time: Double? = nil, kind: MusicItem.Kind = .music, credit: String? = nil) {
         Task {
             do {
                 let src = try await loadMusic(url)
@@ -513,6 +513,7 @@ final class EditorModel: ObservableObject {
                 let length = kind == .music ? min(src.duration, max(1, project.duration - start)) : src.duration
                 var item = MusicItem(url: url, start: start, sourceEnd: length)
                 item.kind = kind
+                item.credit = credit
                 if kind != .music { item.fadeIn = 0; item.fadeOut = 0; item.volume = 1 }
                 // First lane where it doesn't overlap anything.
                 var lane = 0
@@ -1708,9 +1709,9 @@ final class EditorModel: ObservableObject {
     /// (GIFs bigger, stickers small). Plays and loops on the video and in exports.
     func addGiphy(_ item: Giphy.Item, kind: Giphy.Kind) {
         guard hasProject else { return }
-        giphyDownloads += 1
+        libraryDownloads += 1
         Task {
-            defer { giphyDownloads -= 1 }
+            defer { libraryDownloads -= 1 }
             do {
                 let url = try await Giphy.download(item)
                 try placeSticker(url, scale: kind == .gifs ? 0.45 : 0.3)
@@ -1719,8 +1720,23 @@ final class EditorModel: ObservableObject {
             }
         }
     }
-    /// GIPHY downloads in progress (shown in the background-work pill).
-    @Published private(set) var giphyDownloads = 0
+    /// GIPHY and Freesound downloads in progress (shown in the background-work pill).
+    @Published private(set) var libraryDownloads = 0
+
+    /// A Freesound sound effect at the playhead, on the first free audio lane, with its credit kept.
+    func addFreesound(_ sound: Freesound.Sound) {
+        guard hasProject else { return }
+        libraryDownloads += 1
+        Task {
+            defer { libraryDownloads -= 1 }
+            do {
+                let url = try await Freesound.download(sound)
+                addMusic(url, at: clock.time, kind: .effect, credit: sound.credit)
+            } catch {
+                alert = error.localizedDescription
+            }
+        }
+    }
 
     /// Puts a picture on a free overlay lane at the playhead, small and centered. Animated ones last at
     /// least 3 s, in whole loops.
@@ -2245,6 +2261,7 @@ final class EditorModel: ObservableObject {
     // MARK: - Export
 
     @Published var showingExport = false
+    @Published var showingSoundLibrary = false
 
     /// The file being exported (for the progress bar).
     private(set) var exportingName: String? {

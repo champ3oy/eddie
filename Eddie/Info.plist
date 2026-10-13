@@ -33,6 +33,8 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>EddieFreesoundKey</key>
+	<string>$(EDDIE_FREESOUND_KEY)</string>
 	<key>EddieGiphyKey</key>
 	<string>$(EDDIE_GIPHY_KEY)</string>
 	<key>NSMicrophoneUsageDescription</key>

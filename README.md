@@ -246,7 +246,7 @@ the new timeline, and lets the model continue until it says it's done (up to fou
 - When you use an AI feature, Eddie sends a few downscaled frames and a text description of the edit to
   the provider you picked — nothing else, and only when you ask.
 - Captions use on-device speech recognition. API keys are stored in the macOS Keychain.
-- GIPHY (optional, off until you add a key): only your search words go to GIPHY; GIFs you add are saved
+- GIPHY and Freesound (optional): only your search words go to them; GIFs and sounds you add are saved
   in the media folder, so projects keep working offline.
 
 ---
@@ -300,4 +300,6 @@ scripted edit and records its own window. It needs Screen Recording permission.
   and the CLDR annotations — © Unicode, Inc., used under the
   [Unicode License v3](https://www.unicode.org/license.txt).
 - Stickers and GIFs search is **Powered by GIPHY** (bring your own API key, Settings → GIPHY).
+- The sound effects library searches [Freesound.org](https://freesound.org) (Settings → Freesound). Only
+  CC0 and CC BY sounds are offered; Eddie keeps each CC BY sound's credit (Copy Credits in the library).
 - Built with SwiftUI, AVFoundation, Core Image, Speech and Accelerate.

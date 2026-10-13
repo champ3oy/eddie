@@ -58,6 +58,7 @@ struct ContentView: View {
             return true
         }
         .sheet(isPresented: $model.showingExport) { ExportSheet().environmentObject(model) }
+        .sheet(isPresented: $model.showingSoundLibrary) { SoundLibrarySheet().environmentObject(model) }
         .sheet(isPresented: Binding(get: { model.relink != nil }, set: { if !$0 { model.relink = nil } })) {
             RelinkSheet().environmentObject(model)
         }

@@ -8,6 +8,7 @@ struct SettingsView: View {
     @State private var cacheSize: Int64 = 0
     @State private var copied = false
     @State private var giphyKey = ""
+    @State private var freesoundKey = ""
 
     private func copy(_ text: String) {
         NSPasteboard.general.clearContents()
@@ -50,6 +51,25 @@ struct SettingsView: View {
                 Text(Giphy.hasBuiltInKey
                      ? "GIPHY stickers and GIFs work out of the box with Eddie's key; add your own to use it instead. Only your searches go to GIPHY; the GIFs you add are saved on this Mac."
                      : "Adds GIPHY stickers and GIFs to the sticker picker. Only your searches go to GIPHY; the GIFs you add are saved on this Mac.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Freesound") {
+                SecureField("Freesound API key", text: Binding(get: { freesoundKey }, set: { v in
+                    freesoundKey = v
+                    let trimmed = v.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if trimmed.isEmpty { Keychain.delete(account: Freesound.keyAccount) } else { Keychain.write(trimmed, account: Freesound.keyAccount) }
+                }))
+                HStack {
+                    Link("Get a free Freesound API key", destination: URL(string: "https://freesound.org/apiv2/apply")!)
+                    Spacer()
+                    Text("Or set FREESOUND_API_KEY").foregroundStyle(.secondary)
+                }
+                .font(.caption)
+                Text(Freesound.hasBuiltInKey
+                     ? "The sound effects library works out of the box with Eddie's key; add your own to use it instead. Only your searches go to Freesound; sounds you add are saved on this Mac."
+                     : "Powers the sound effects library (⌥⌘L). Only your searches go to Freesound; sounds you add are saved on this Mac.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -113,6 +133,7 @@ struct SettingsView: View {
         .onAppear {
             cacheSize = MediaCache.size()
             giphyKey = Keychain.read(account: Giphy.keyAccount) ?? ""
+            freesoundKey = Keychain.read(account: Freesound.keyAccount) ?? ""
             for kind in ProviderKind.allCases {
                 keys[kind] = Keychain.read(account: kind.rawValue) ?? ""
                 let m = AISettings.model(for: kind)

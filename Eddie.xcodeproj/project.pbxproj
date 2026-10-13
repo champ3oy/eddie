@@ -41,9 +41,12 @@
 		4C076B08F620291E4E9C99AF /* AudioProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7025ED54277416BB97A487D8 /* AudioProcessor.swift */; };
 		4C73B05A2954049494C60CD5 /* FrameSampler.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6CAD9B54614DDDCCA59C533 /* FrameSampler.swift */; };
 		51D95987CEBF0E2DD22EB680 /* subject.mov in Resources */ = {isa = PBXBuildFile; fileRef = 8FA3E36103F0B30B328B0086 /* subject.mov */; };
+		58F44E0AD1B8B0475E61E11F /* SoundLibrarySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E87F30C49BDD85E9152E88D /* SoundLibrarySheet.swift */; };
+		5B68E94E0B0C0361D191E2BC /* FreesoundTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B15141A8F8B04A56793ED262 /* FreesoundTests.swift */; };
 		5BA4C4B5DEA894CE50FED181 /* VideoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1ACCF3D42BE493BB477A0843 /* VideoTests.swift */; };
 		6133A2D0B9E9C242474501A2 /* ramp_10bit.mov in Resources */ = {isa = PBXBuildFile; fileRef = 1849CB3F1D07C0BB8C285BA1 /* ramp_10bit.mov */; };
 		627906619944DDF9B7DD2D5E /* ViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E1EAFD2A55CB50D2C488D20 /* ViewerView.swift */; };
+		65140C40C305064E8328CE57 /* BuiltInKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC25C9BA5FAB2978135D13DE /* BuiltInKeys.swift */; };
 		660F59BEBB4D3D07219322A0 /* ExportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15BDA4AB8E9967E5D3322F2D /* ExportSheet.swift */; };
 		68FFEE9108732BEF4B090B49 /* EditActionSchema.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA4AFD5871C9238397CFA59B /* EditActionSchema.swift */; };
 		6AA1F0619C4801AA72E7B931 /* GradeCompositor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62B8BFF4F387AA818EAB7E39 /* GradeCompositor.swift */; };
@@ -86,6 +89,7 @@
 		D4B7541AD2C0E185D1930B95 /* AgentProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD3952D290F9FDF06D487E85 /* AgentProtocol.swift */; };
 		D5A6D27792C59ECF2D017F32 /* VisualEffects.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4FFE23B23D45C471E676C41 /* VisualEffects.swift */; };
 		D7C3B5AF6E32598E0EBBF5BE /* TimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E1AAD5C9D58B77F5E905E9A /* TimelineView.swift */; };
+		D91DE08885E84F500A10B3CC /* FreesoundClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A254CC6769F98B1AAD2B377 /* FreesoundClient.swift */; };
 		DF57DAD12A77F1C0435A5F1B /* SnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DACFEBA26AB5812060A163D /* SnapshotTests.swift */; };
 		E0506CA2E5E598A4CB853637 /* VisualTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9F1E9AC7B854EA13CFF7778 /* VisualTypes.swift */; };
 		E18F13F79C9BF604D51167AF /* LivePlaybackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C181422D21E1EF8F2B8D2D9D /* LivePlaybackTests.swift */; };
@@ -155,6 +159,7 @@
 		2BE10913E5F5A21E3CA20606 /* GiphyClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GiphyClient.swift; sourceTree = "<group>"; };
 		2C488DD7A9FE37EB9C663AD4 /* CaptionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptionTests.swift; sourceTree = "<group>"; };
 		2E370A95CD22BC37AFC1D830 /* carrier.mov */ = {isa = PBXFileReference; lastKnownFileType = video.quicktime; path = carrier.mov; sourceTree = "<group>"; };
+		2E87F30C49BDD85E9152E88D /* SoundLibrarySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundLibrarySheet.swift; sourceTree = "<group>"; };
 		3071B2327D62E6C5064D9139 /* VoiceRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceRecorder.swift; sourceTree = "<group>"; };
 		328B93E55BA024FC3F1B60DF /* emoji.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = emoji.json; sourceTree = "<group>"; };
 		34FA3DCDA7B60948B3962F4A /* VisualPackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisualPackTests.swift; sourceTree = "<group>"; };
@@ -178,6 +183,7 @@
 		6F873F0901999AEAC2419F90 /* EditorModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorModel.swift; sourceTree = "<group>"; };
 		7025ED54277416BB97A487D8 /* AudioProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioProcessor.swift; sourceTree = "<group>"; };
 		71E72013365BE403F5E594BB /* Project.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Project.swift; sourceTree = "<group>"; };
+		7A254CC6769F98B1AAD2B377 /* FreesoundClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FreesoundClient.swift; sourceTree = "<group>"; };
 		7E1EAFD2A55CB50D2C488D20 /* ViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewerView.swift; sourceTree = "<group>"; };
 		813B03E7992BB2A949055172 /* AITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AITests.swift; sourceTree = "<group>"; };
 		8262B33344E5CEB781FC5272 /* Providers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Providers.swift; sourceTree = "<group>"; };
@@ -196,6 +202,7 @@
 		A87328C8E7C9BD72CFEEA4AA /* LayeredEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayeredEngineTests.swift; sourceTree = "<group>"; };
 		AB2356660B06B25E600C67A9 /* ExportSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportSettings.swift; sourceTree = "<group>"; };
 		B10CCF888EFB1913ABE6EDC6 /* EditorFeatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorFeatureTests.swift; sourceTree = "<group>"; };
+		B15141A8F8B04A56793ED262 /* FreesoundTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FreesoundTests.swift; sourceTree = "<group>"; };
 		B4AA6E6F149DA35E51BB7614 /* DemoAnchors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoAnchors.swift; sourceTree = "<group>"; };
 		B607107A0352B13B69978EF8 /* StickerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StickerTests.swift; sourceTree = "<group>"; };
 		B674E401798EA78F3861EAC3 /* AgentNewActionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentNewActionsTests.swift; sourceTree = "<group>"; };
@@ -224,6 +231,7 @@
 		DFB6B4AB7BF093F2F96B9108 /* ChatPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatPanel.swift; sourceTree = "<group>"; };
 		E2A92D32CAFFAA4345F09A40 /* moving.mov */ = {isa = PBXFileReference; lastKnownFileType = video.quicktime; path = moving.mov; sourceTree = "<group>"; };
 		E43A7A36E70D5B201E290A2B /* EditingAgent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditingAgent.swift; sourceTree = "<group>"; };
+		EC25C9BA5FAB2978135D13DE /* BuiltInKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuiltInKeys.swift; sourceTree = "<group>"; };
 		EC972A3CFF30AD3A786886C3 /* pause.mov */ = {isa = PBXFileReference; lastKnownFileType = video.quicktime; path = pause.mov; sourceTree = "<group>"; };
 		F370332329258DC541EB92FD /* LiveGradeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveGradeTests.swift; sourceTree = "<group>"; };
 		F64FCBEF6B42EA73CC122AE9 /* GradeRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GradeRenderer.swift; sourceTree = "<group>"; };
@@ -266,6 +274,8 @@
 		3DCA114E696EFBDD7C5985AA /* Media */ = {
 			isa = PBXGroup;
 			children = (
+				EC25C9BA5FAB2978135D13DE /* BuiltInKeys.swift */,
+				7A254CC6769F98B1AAD2B377 /* FreesoundClient.swift */,
 				2BE10913E5F5A21E3CA20606 /* GiphyClient.swift */,
 			);
 			path = Media;
@@ -385,6 +395,7 @@
 				4402A7E4A5561CA14446FE1B /* MediaBinView.swift */,
 				5588A80FD7C6F41B73C49723 /* ProjectsView.swift */,
 				89C9A64DF46D2B64B50232A1 /* SettingsView.swift */,
+				2E87F30C49BDD85E9152E88D /* SoundLibrarySheet.swift */,
 				CAB4130029D9FB32124DBE51 /* StickerPicker.swift */,
 				0E1AAD5C9D58B77F5E905E9A /* TimelineView.swift */,
 				DB6FBFAD1975E80649A9A7F2 /* TransitionEditor.swift */,
@@ -450,6 +461,7 @@
 				2C488DD7A9FE37EB9C663AD4 /* CaptionTests.swift */,
 				48F49E23F37F39846CE89E63 /* EditingAgentTests.swift */,
 				B10CCF888EFB1913ABE6EDC6 /* EditorFeatureTests.swift */,
+				B15141A8F8B04A56793ED262 /* FreesoundTests.swift */,
 				0BC71D939CBFC502D264A53C /* GradeTests.swift */,
 				A87328C8E7C9BD72CFEEA4AA /* LayeredEngineTests.swift */,
 				3768F4B1BD04238C6E00BFF7 /* LibraryTests.swift */,
@@ -624,6 +636,7 @@
 				07F12DC1C76E31953CFB3F66 /* CaptionTests.swift in Sources */,
 				0EDEECB4D9CCA6C3BA33B444 /* EditingAgentTests.swift in Sources */,
 				72C70FB49EAC200B5260345E /* EditorFeatureTests.swift in Sources */,
+				5B68E94E0B0C0361D191E2BC /* FreesoundTests.swift in Sources */,
 				260FB7F905BDD296AF0D7658 /* GradeTests.swift in Sources */,
 				9E060A625A903731919A8989 /* LayeredEngineTests.swift in Sources */,
 				A40CF93BC29D190135C6B75E /* LibraryTests.swift in Sources */,
@@ -660,6 +673,7 @@
 				9CE6BD59628F93D642589072 /* AnimatedImage.swift in Sources */,
 				4C076B08F620291E4E9C99AF /* AudioProcessor.swift in Sources */,
 				177A40558B4C11CC10A7F049 /* BeatDetector.swift in Sources */,
+				65140C40C305064E8328CE57 /* BuiltInKeys.swift in Sources */,
 				B900E1897480746EBC474AE2 /* CaptionTools.swift in Sources */,
 				046D9C5660EE5D0C3E1CA5EB /* Captioner.swift in Sources */,
 				6DA311264D83085AA6B7CDDD /* CaptionsPanel.swift in Sources */,
@@ -678,6 +692,7 @@
 				F821E9C04856EA82C2BA9686 /* Exporter.swift in Sources */,
 				4C73B05A2954049494C60CD5 /* FrameSampler.swift in Sources */,
 				11E6E32B6E990271476E7578 /* FrameStats.swift in Sources */,
+				D91DE08885E84F500A10B3CC /* FreesoundClient.swift in Sources */,
 				6DB09D5B262F668700B1D87C /* GiphyClient.swift in Sources */,
 				6AA1F0619C4801AA72E7B931 /* GradeCompositor.swift in Sources */,
 				98F61531E6F876F2C038B95A /* GradeKernelSource.swift in Sources */,
@@ -696,6 +711,7 @@
 				4680D010BDA1FEAC1465F68D /* Providers.swift in Sources */,
 				41E94C62EC6C53A5C5002761 /* Reverser.swift in Sources */,
 				2A605F614C950F29D3CC09E4 /* SettingsView.swift in Sources */,
+				58F44E0AD1B8B0475E61E11F /* SoundLibrarySheet.swift in Sources */,
 				EF44AF85EBBED1E627B9C229 /* SpeechMaker.swift in Sources */,
 				EF79F0C0354CE0111B369CBB /* StickerPicker.swift in Sources */,
 				D7C3B5AF6E32598E0EBBF5BE /* TimelineView.swift in Sources */,
@@ -831,6 +847,7 @@
 				CODE_SIGN_ENTITLEMENTS = Eddie/Eddie.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				EDDIE_FREESOUND_KEY = "";
 				EDDIE_GIPHY_KEY = "";
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -856,6 +873,7 @@
 				CODE_SIGN_ENTITLEMENTS = Eddie/Eddie.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				EDDIE_FREESOUND_KEY = "";
 				EDDIE_GIPHY_KEY = "";
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = YES;

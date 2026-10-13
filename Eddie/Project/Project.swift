@@ -208,6 +208,8 @@ struct MusicItem: Identifiable, Codable, Equatable {
     var beats: [Double] = []
     /// Volume over time (seconds into the item on the timeline); empty = steady.
     var volumePoints: [VolumePoint] = []
+    /// Who to credit, for sounds from Freesound ("“Whoosh” by … — CC BY 4.0").
+    var credit: String?
 
     var name: String { url.lastPathComponent }
     var playURL: URL { processed ?? url }
@@ -231,6 +233,7 @@ extension MusicItem {
         processed = try c.decodeIfPresent(URL.self, forKey: .processed)
         beats = try c.decodeIfPresent([Double].self, forKey: .beats) ?? []
         volumePoints = try c.decodeIfPresent([VolumePoint].self, forKey: .volumePoints) ?? []
+        credit = try c.decodeIfPresent(String.self, forKey: .credit)
     }
 }
 

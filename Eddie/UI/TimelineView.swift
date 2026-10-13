@@ -263,7 +263,8 @@ struct TimelineView: View {
     private var musicTool: some View {
         Menu {
             Button("Add Music…") { Panels.addMusic(model) }
-            Button("Add Sound Effects…") { Panels.addMusic(model, kind: .effect) }
+            Button("Sound Effects Library…") { model.showingSoundLibrary = true }
+            Button("Add Sound Effects from a File…") { Panels.addMusic(model, kind: .effect) }
             Button("Text to Speech…") { showSpeech = true }
         } label: {
             Image(systemName: "music.note").font(.system(size: 13))
@@ -274,7 +275,7 @@ struct TimelineView: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .frame(width: 26, height: 22)
-        .help("Add music (⌥⌘M) — hold for sound effects and text to speech")
+        .help("Add music (⌥⌘M) — hold for the sound effects library and text to speech")
         .demoAnchor("tool-music")
         .disabled(!model.hasProject)
     }
@@ -331,7 +332,8 @@ struct TimelineView: View {
             if adds {
                 Button("Add Overlay…") { Panels.addOverlay(model) }
                 Button("Add Music…") { Panels.addMusic(model) }
-                Button("Add Sound Effects…") { Panels.addMusic(model, kind: .effect) }
+                Button("Sound Effects Library…") { model.showingSoundLibrary = true }
+                Button("Add Sound Effects from a File…") { Panels.addMusic(model, kind: .effect) }
                 Button("Text to Speech…") { showSpeech = true }
                 Menu("Add Sticker") {
                     ForEach(EditorModel.stickerEmoji, id: \.self) { e in Button(e) { model.addSticker(e) } }

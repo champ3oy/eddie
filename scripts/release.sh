@@ -7,10 +7,10 @@
 # One-time setup for notarization (an app-specific password from appleid.apple.com):
 #   xcrun notarytool store-credentials eddie --apple-id <you@example.com> --team-id F77F7X4Q2W
 #
-# Built-in GIPHY key (DMG only — never in the repo). The first of these that's set is used:
-#   EDDIE_GIPHY_KEY=… scripts/release.sh
-#   .secrets/giphy-key            (a file with just the key; .secrets/ is git-ignored)
-# Without one the DMG still works; people add their own key in Settings.
+# Built-in GIPHY and Freesound keys (DMG only — never in the repo). For each, the first that's set is used:
+#   EDDIE_GIPHY_KEY=… / EDDIE_FREESOUND_KEY=… scripts/release.sh
+#   .secrets/giphy-key, .secrets/freesound-key   (files with just the key; .secrets/ is git-ignored)
+# Without them the DMG still works; people add their own keys in Settings.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -25,16 +25,17 @@ step() { printf "\n▸ %s\n" "$1"; }
 step "Generating the Xcode project"
 xcodegen generate --quiet
 
-GIPHY_KEY="${EDDIE_GIPHY_KEY:-}"
-if [[ -z "$GIPHY_KEY" && -f .secrets/giphy-key ]]; then GIPHY_KEY="$(tr -d '[:space:]' < .secrets/giphy-key)"; fi
-# Stored lightly scrambled (XOR, hex) so it isn't sitting in the app as plain text. Eddie unscrambles it.
-GIPHY_BUILTIN=""
-if [[ -n "$GIPHY_KEY" ]]; then
-  GIPHY_BUILTIN="$(GIPHY_KEY="$GIPHY_KEY" python3 -c 'import os; k=os.environ["GIPHY_KEY"].encode(); m=b"eddie-giphy"; print(bytes(c ^ m[i % len(m)] for i, c in enumerate(k)).hex())')"
-  step "Including the built-in GIPHY key"
-else
-  step "No GIPHY key found (EDDIE_GIPHY_KEY or .secrets/giphy-key) — the DMG will ask users for their own"
-fi
+# Built-in service keys, lightly scrambled (XOR, hex) so they aren't sitting in the app as plain text.
+# Eddie unscrambles them (ServiceKey). Each comes from an environment variable or a .secrets/ file.
+scramble() { KEY="$1" python3 -c 'import os; k=os.environ["KEY"].encode(); m=b"eddie-giphy"; print(bytes(c ^ m[i % len(m)] for i, c in enumerate(k)).hex())'; }
+builtin_key() {   # builtin_key <ENV_NAME> <secrets file> <label>
+  local key="${!1:-}"
+  if [[ -z "$key" && -f "$2" ]]; then key="$(tr -d '[:space:]' < "$2")"; fi
+  if [[ -n "$key" ]]; then step "Including the built-in $3 key" >&2; scramble "$key"
+  else step "No $3 key ($1 or $2) — the DMG will ask users for their own" >&2; fi
+}
+GIPHY_BUILTIN="$(builtin_key EDDIE_GIPHY_KEY .secrets/giphy-key GIPHY)"
+FREESOUND_BUILTIN="$(builtin_key EDDIE_FREESOUND_KEY .secrets/freesound-key Freesound)"
 
 step "Building Release (signed with $IDENTITY)"
 rm -rf build/dist
@@ -42,7 +43,7 @@ xcodebuild -project Eddie.xcodeproj -scheme Eddie -configuration Release \
   -derivedDataPath build/dist-derived \
   CODE_SIGN_IDENTITY="$IDENTITY" CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM="$TEAM" \
   OTHER_CODE_SIGN_FLAGS="--timestamp" CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
-  EDDIE_GIPHY_KEY="$GIPHY_BUILTIN" \
+  EDDIE_GIPHY_KEY="$GIPHY_BUILTIN" EDDIE_FREESOUND_KEY="$FREESOUND_BUILTIN" \
   build -quiet
 
 mkdir -p build/dist dist

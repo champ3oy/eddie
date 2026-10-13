@@ -25,32 +25,9 @@ enum Giphy {
 
     static let keyAccount = "giphy"
     /// Your own key (Settings) first, then GIPHY_API_KEY, then the key built into release DMGs.
-    static var apiKey: String {
-        let own = (Keychain.read(account: keyAccount) ?? ProcessInfo.processInfo.environment["GIPHY_API_KEY"] ?? "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return own.isEmpty ? builtInKey : own
-    }
-
-    /// The key scripts/release.sh puts in the app's Info.plist (lightly scrambled). Empty in builds from source.
-    static let builtInKey: String = {
-        let hex = Bundle.main.object(forInfoDictionaryKey: "EddieGiphyKey") as? String ?? ""
-        return unscramble(hex)
-    }()
-    static var hasBuiltInKey: Bool { !builtInKey.isEmpty }
-
-    static func unscramble(_ hex: String) -> String {
-        guard hex.count.isMultiple(of: 2), !hex.isEmpty, !hex.hasPrefix("$(") else { return "" }
-        let mask = Array("eddie-giphy".utf8)
-        var bytes: [UInt8] = []
-        var i = hex.startIndex
-        while i < hex.endIndex {
-            let j = hex.index(i, offsetBy: 2)
-            guard let b = UInt8(hex[i..<j], radix: 16) else { return "" }
-            bytes.append(b ^ mask[bytes.count % mask.count])
-            i = j
-        }
-        return String(decoding: bytes, as: UTF8.self)
-    }
+    static var apiKey: String { ServiceKey.value(account: keyAccount, environment: "GIPHY_API_KEY", infoKey: "EddieGiphyKey") }
+    static var hasBuiltInKey: Bool { !ServiceKey.builtIn("EddieGiphyKey").isEmpty }
+    static func unscramble(_ hex: String) -> String { ServiceKey.unscramble(hex) }
     static var hasKey: Bool { !apiKey.isEmpty }
 
     enum Failure: LocalizedError {

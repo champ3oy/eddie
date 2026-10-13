@@ -56,7 +56,10 @@ struct EddieApp: App {
                 Button("Add Overlay…") { Panels.addOverlay(model) }
                     .keyboardShortcut("i", modifiers: [.command, .shift])
                     .disabled(!model.hasProject)
-                Button("Add Sound Effect…") { Panels.addMusic(model, kind: .effect) }
+                Button("Sound Effects Library…") { model.showingSoundLibrary = true }
+                    .keyboardShortcut("l", modifiers: [.command, .option])
+                    .disabled(!model.hasProject)
+                Button("Add Sound Effect from a File…") { Panels.addMusic(model, kind: .effect) }
                     .disabled(!model.hasProject)
                 Button(model.recorder.isRecording ? "Stop Recording" : "Record Voiceover") { model.toggleVoiceover() }
                     .keyboardShortcut("r", modifiers: [.command, .shift])
